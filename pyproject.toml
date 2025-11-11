@@ -1,0 +1,20 @@
+[project]
+name = "gepe-web-backend"
+version = "0.1.0"
+description = "GEPE backend API with FastAPI"
+requires-python = ">=3.11"
+authors = [ { name = "Alvaro" } ]
+dependencies = [
+  "fastapi~=0.115.0",
+  "uvicorn[standard]~=0.30.0",
+  "python-dotenv~=1.0.1"
+]
+
+[tool.uvicorn]
+factory = false
+host = "0.0.0.0"
+port = 8000
+reload = true
+
+[tool.black]
+line-length = 100
