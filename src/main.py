@@ -3,7 +3,8 @@ import logging
 from pathlib import Path
 from dotenv import load_dotenv
 from fastapi import FastAPI
-from .routers import products, clubs, stats, cart, user
+from fastapi.middleware.cors import CORSMiddleware
+from .routers import products, clubs, stats, cart, user, promo_banner
 from .config import get_settings
 from .database import Base, engine
 
@@ -22,10 +23,24 @@ from .models.product import Product, Category  # noqa: F401
 from .models.user import User  # noqa: F401
 from .models.cart import CartItem  # noqa: F401
 from .models.order import Order  # noqa: F401
+from .models.promo_banner import PromoBanner  # noqa: F401
 
 settings = get_settings()
 
 app = FastAPI(title="GEPE Web Backend", version="0.1.0")
+
+# Configurar CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:3000",
+        "http://localhost:3001",
+        settings.cors_origin,
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # Crear tablas si no existen (para desarrollo / primera versión)
 # IMPORTANTE: Todos los modelos deben estar importados antes de esta línea
@@ -71,6 +86,7 @@ app.include_router(clubs.router, prefix="/api")
 app.include_router(stats.router, prefix="/api")
 app.include_router(cart.router, prefix="/api")
 app.include_router(user.router, prefix="/api")
+app.include_router(promo_banner.router, prefix="/api")
 
 
 @app.get("/", tags=["root"])  # Simple welcome endpoint
