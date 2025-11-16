@@ -29,6 +29,8 @@ fix_database_url.py
 setup-venv.bat
 run-backend.bat
 
+# NOTA: run-dev.bat NO está excluido porque es necesario para Windows
+
 # Testing
 .pytest_cache/
 .coverage
