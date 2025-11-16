@@ -1,7 +1,50 @@
 __pycache__/
-.env
-.venv/
-.pytest_cache/
 *.pyc
+*.pyo
+*.pyd
+.Python
+
+# Entorno virtual
+.venv/
+venv/
+ENV/
+env/
+
+# Variables de entorno (NO subir credenciales)
+.env
+.env.local
+.env.*.local
+
+# Base de datos local SQLite (ya no se usa, estamos en Railway PostgreSQL)
+*.db
+*.sqlite
+*.sqlite3
+gepe.db
+
+# Scripts de test y desarrollo temporal
+test_db_connection.py
+create_tables.py
+fix_database_url.py
+setup-venv.bat
+run-backend.bat
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# Distribución
 dist/
+build/
+*.egg-info/
+
+# Node modules (si hubiera alguno)
 node_modules/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
