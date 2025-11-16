@@ -15,7 +15,8 @@ env/
 .env.local
 .env.*.local
 
-# Base de datos local SQLite (ya no se usa, estamos en Railway PostgreSQL)
+# Base de datos local SQLite (usada en desarrollo local para ahorrar créditos Railway)
+# NOTA: gepe.db está excluido para que cada desarrollador tenga su propia BD local
 *.db
 *.sqlite
 *.sqlite3
