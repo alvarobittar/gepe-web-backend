@@ -66,6 +66,8 @@ def list_products(
     q: Optional[str] = Query(default=None, description="Buscar por nombre de prenda o club"),
     gender: Optional[str] = Query(default=None, description="Filtrar por género (hombre/mujer)"),
     category: Optional[str] = Query(default=None, description="Slug de categoría"),
+    offset: int = Query(0, ge=0, description="Desplazamiento para paginación (número de items a saltar)"),
+    limit: int = Query(20, ge=1, le=100, description="Cantidad máxima de productos a devolver"),
     db: Session = Depends(get_db),
 ):
     """
@@ -89,7 +91,7 @@ def list_products(
     if category:
         query = query.join(Product.category).filter(Category.slug == category)
 
-    products = query.order_by(Product.id.desc()).all()
+    products = query.order_by(Product.id.desc()).offset(offset).limit(limit).all()
     return products
 
 
