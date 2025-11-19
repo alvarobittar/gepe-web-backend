@@ -19,7 +19,7 @@ load_dotenv(dotenv_path=env_path)
 
 # Importar todos los modelos para que SQLAlchemy los registre antes de create_all()
 # Esto asegura que todas las tablas se creen correctamente
-from .models.product import Product, Category  # noqa: F401
+from .models.product import Product, Category, ProductSizeStock  # noqa: F401
 from .models.user import User  # noqa: F401
 from .models.cart import CartItem  # noqa: F401
 from .models.order import Order  # noqa: F401

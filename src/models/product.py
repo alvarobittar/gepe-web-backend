@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Float, Boolean, ForeignKey
+from sqlalchemy import Column, Integer, String, Float, Boolean, ForeignKey, UniqueConstraint
 from sqlalchemy.orm import relationship
 
 from ..database import Base
@@ -35,3 +35,19 @@ class Product(Base):
 
     category_id = Column(Integer, ForeignKey("categories.id"), nullable=True)
     category = relationship("Category", back_populates="products")
+    size_stocks = relationship("ProductSizeStock", back_populates="product", cascade="all, delete-orphan")
+
+
+class ProductSizeStock(Base):
+    __tablename__ = "product_size_stocks"
+
+    id = Column(Integer, primary_key=True, index=True)
+    product_id = Column(Integer, ForeignKey("products.id"), nullable=False, index=True)
+    size = Column(String(20), nullable=False)
+    stock = Column(Integer, default=0, nullable=False)
+
+    product = relationship("Product", back_populates="size_stocks")
+
+    __table_args__ = (
+        UniqueConstraint('product_id', 'size', name='unique_product_size'),
+    )
