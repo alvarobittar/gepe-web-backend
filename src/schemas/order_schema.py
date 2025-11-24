@@ -1,0 +1,82 @@
+from pydantic import BaseModel, EmailStr
+from typing import Optional, List
+from datetime import datetime
+
+
+class OrderItemCreate(BaseModel):
+    product_id: Optional[int] = None
+    product_name: str
+    product_size: Optional[str] = None
+    quantity: int
+    unit_price: float
+
+
+class OrderItemOut(BaseModel):
+    id: int
+    product_id: Optional[int]
+    product_name: str
+    product_size: Optional[str]
+    quantity: int
+    unit_price: float
+
+    class Config:
+        from_attributes = True
+
+
+class OrderCreate(BaseModel):
+    customer_email: EmailStr
+    customer_name: Optional[str] = None
+    customer_phone: Optional[str] = None
+    customer_dni: Optional[str] = None
+    shipping_method: Optional[str] = None
+    shipping_address: Optional[str] = None
+    shipping_city: Optional[str] = None
+    external_reference: Optional[str] = None
+    payment_id: Optional[str] = None
+    items: List[OrderItemCreate]
+
+
+class OrderUpdate(BaseModel):
+    status: Optional[str] = None
+    payment_id: Optional[str] = None
+
+
+class OrderOut(BaseModel):
+    id: int
+    order_number: Optional[str]  # Número público único (ej: GEPE-ABC123)
+    user_id: Optional[int]
+    status: str
+    total_amount: float
+    external_reference: Optional[str]
+    payment_id: Optional[str]
+    customer_email: Optional[str]
+    customer_name: Optional[str]
+    customer_phone: Optional[str]
+    customer_dni: Optional[str]
+    shipping_method: Optional[str]
+    shipping_address: Optional[str]
+    shipping_city: Optional[str]
+    created_at: datetime
+    updated_at: datetime
+    items: List[OrderItemOut]
+
+    class Config:
+        from_attributes = True
+
+
+class OrderListOut(BaseModel):
+    id: int
+    order_number: Optional[str]  # Número público único (ej: GEPE-ABC123)
+    customer_email: Optional[str]
+    customer_name: Optional[str]
+    status: str
+    total_amount: float
+    created_at: datetime
+    items_count: int = 0
+    first_product_name: Optional[str] = None  # Nombre del primer producto para vista previa
+    payment_id: Optional[str] = None  # ID del pago en Mercado Pago
+    external_reference: Optional[str] = None  # Referencia externa de Mercado Pago
+
+    class Config:
+        from_attributes = True
+

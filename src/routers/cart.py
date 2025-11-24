@@ -84,3 +84,19 @@ def delete_cart_item(item_id: int, db: Session = Depends(get_db)):
     return {}
 
 
+@router.delete("/items", response_model=None)
+def clear_cart(db: Session = Depends(get_db)):
+    """
+    Elimina todos los items del carrito del usuario actual.
+    Útil para vaciar el carrito después de completar una compra.
+    """
+    try:
+        # MVP: eliminar todos los items del carrito (usuario invitado único)
+        deleted_count = db.query(CartItem).delete()
+        db.commit()
+        return {"message": f"{deleted_count} items eliminados del carrito", "deleted_count": deleted_count}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Error al vaciar carrito: {str(e)}")
+
+
