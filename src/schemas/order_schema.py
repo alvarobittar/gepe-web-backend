@@ -37,8 +37,11 @@ class OrderCreate(BaseModel):
 
 
 class OrderUpdate(BaseModel):
-    status: Optional[str] = None
+    status: Optional[str] = None  # PENDING, PAID, IN_PRODUCTION, SHIPPED, DELIVERED, CANCELLED, REFUNDED
     payment_id: Optional[str] = None
+    shipping_address: Optional[str] = None
+    shipping_city: Optional[str] = None
+    tracking_code: Optional[str] = None
 
 
 class OrderOut(BaseModel):
@@ -56,6 +59,7 @@ class OrderOut(BaseModel):
     shipping_method: Optional[str]
     shipping_address: Optional[str]
     shipping_city: Optional[str]
+    tracking_code: Optional[str]  # Código de seguimiento
     created_at: datetime
     updated_at: datetime
     items: List[OrderItemOut]
@@ -76,6 +80,10 @@ class OrderListOut(BaseModel):
     first_product_name: Optional[str] = None  # Nombre del primer producto para vista previa
     payment_id: Optional[str] = None  # ID del pago en Mercado Pago
     external_reference: Optional[str] = None  # Referencia externa de Mercado Pago
+    shipping_method: Optional[str] = None  # Método de envío
+    shipping_address: Optional[str] = None  # Dirección de envío
+    shipping_city: Optional[str] = None  # Ciudad de envío
+    tracking_code: Optional[str] = None  # Código de seguimiento
 
     class Config:
         from_attributes = True

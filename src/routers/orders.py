@@ -192,7 +192,11 @@ async def list_orders(
                 "items_count": len(order.items),
                 "first_product_name": first_product_name,
                 "payment_id": order.payment_id,
-                "external_reference": order.external_reference
+                "external_reference": order.external_reference,
+                "shipping_method": order.shipping_method,
+                "shipping_address": order.shipping_address,
+                "shipping_city": order.shipping_city,
+                "tracking_code": order.tracking_code
             }
             result.append(OrderListOut(**order_dict))
         
@@ -250,7 +254,11 @@ async def list_user_orders(
                 "items_count": len(order.items),
                 "first_product_name": first_product_name,
                 "payment_id": order.payment_id,
-                "external_reference": order.external_reference
+                "external_reference": order.external_reference,
+                "shipping_method": order.shipping_method,
+                "shipping_address": order.shipping_address,
+                "shipping_city": order.shipping_city,
+                "tracking_code": order.tracking_code
             }
             result.append(OrderListOut(**order_dict))
         
@@ -367,6 +375,18 @@ async def update_order(
     
     if order_update.payment_id:
         order.payment_id = order_update.payment_id
+    
+    if order_update.shipping_address is not None:
+        order.shipping_address = order_update.shipping_address
+        logger.info(f"Orden {order_id}: dirección de envío actualizada")
+    
+    if order_update.shipping_city is not None:
+        order.shipping_city = order_update.shipping_city
+        logger.info(f"Orden {order_id}: ciudad de envío actualizada")
+    
+    if order_update.tracking_code is not None:
+        order.tracking_code = order_update.tracking_code
+        logger.info(f"Orden {order_id}: código de seguimiento actualizado: {order_update.tracking_code}")
     
     try:
         db.commit()

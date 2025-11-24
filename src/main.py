@@ -4,7 +4,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from .routers import products, clubs, stats, cart, user, promo_banner, payments, orders, categories
+from .routers import products, clubs, stats, cart, user, promo_banner, payments, orders, categories, payment_details
 from .config import get_settings, clear_settings_cache
 from .database import Base, engine
 
@@ -31,6 +31,7 @@ from .models.product import Product, Category, ProductSizeStock  # noqa: F401
 from .models.user import User  # noqa: F401
 from .models.cart import CartItem  # noqa: F401
 from .models.order import Order  # noqa: F401
+from .models.payment import Payment  # noqa: F401
 from .models.promo_banner import PromoBanner  # noqa: F401
 
 settings = get_settings()
@@ -90,6 +91,7 @@ def create_tables():
                     "shipping_method": "VARCHAR(50)",
                     "shipping_address": "VARCHAR(500)",
                     "shipping_city": "VARCHAR(100)",
+                    "tracking_code": "VARCHAR(100)",
                     "created_at": "DATETIME",
                     "updated_at": "DATETIME",
                 }
@@ -178,6 +180,7 @@ app.include_router(promo_banner.router, prefix="/api")
 app.include_router(payments.router, prefix="/api/payments")
 app.include_router(orders.router, prefix="/api")
 app.include_router(categories.router, prefix="/api")
+app.include_router(payment_details.router, prefix="/api")
 
 
 @app.get("/", tags=["root"])  # Simple welcome endpoint

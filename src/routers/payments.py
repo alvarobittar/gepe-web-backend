@@ -7,9 +7,11 @@ from fastapi import APIRouter, HTTPException, Request, Depends, status
 from sqlalchemy.orm import Session
 from typing import Dict, Any
 
+import json
 from ..config import get_settings
 from ..database import get_db
 from ..models.order import Order
+from ..models.payment import Payment
 from ..schemas.payment_schema import PreferenceInput, PreferenceResponse
 
 logger = logging.getLogger(__name__)
@@ -278,6 +280,102 @@ async def mercadopago_webhook(
             f"Monto: {payment.get('transaction_amount')}"
         )
         
+        # Guardar o actualizar información detallada del pago en la tabla payments
+        # Extraer información del método de pago
+        # La información puede estar en diferentes lugares según el tipo de pago
+        card_info = payment.get("card", {})
+        
+        # payment_method_id puede estar en payment.payment_method_id o payment.card.payment_method_id
+        payment_method_id = payment.get("payment_method_id") or card_info.get("payment_method_id")
+        
+        # payment_type_id indica el tipo: credit_card, debit_card, ticket, account_money, etc.
+        payment_type_id = payment.get("payment_type_id")
+        
+        # Para tarjetas, los últimos 4 dígitos están en card.last_four_digits
+        card_last_four = card_info.get("last_four_digits") if card_info else None
+        
+        # Nombre del titular de la tarjeta
+        card_holder = card_info.get("cardholder", {}).get("name") if card_info else None
+        
+        # Logging para debug
+        logger.info(
+            f"Información de método de pago extraída - "
+            f"payment_method_id: {payment_method_id}, "
+            f"payment_type_id: {payment_type_id}, "
+            f"card_last_four: {card_last_four}"
+        )
+        
+        # Extraer información de reembolsos
+        refunds = payment.get("refunds", [])
+        refunded_amount = sum(float(refund.get("amount", 0)) for refund in refunds)
+        refunded_count = len(refunds)
+        
+        # Verificar contracargos
+        has_chargeback = "true" if payment.get("chargeback") or payment.get("chargebacks") else "false"
+        
+        # Extraer fechas
+        from datetime import datetime as dt
+        date_created_str = payment.get("date_created")
+        date_approved_str = payment.get("date_approved")
+        date_last_updated_str = payment.get("date_last_updated")
+        
+        date_created = dt.fromisoformat(date_created_str.replace("Z", "+00:00")) if date_created_str else None
+        date_approved = dt.fromisoformat(date_approved_str.replace("Z", "+00:00")) if date_approved_str else None
+        date_last_updated = dt.fromisoformat(date_last_updated_str.replace("Z", "+00:00")) if date_last_updated_str else None
+        
+        # Buscar o crear registro de Payment
+        existing_payment = db.query(Payment).filter(Payment.mp_payment_id == resource_id).first()
+        
+        if existing_payment:
+            # Actualizar pago existente
+            existing_payment.status = payment_status
+            existing_payment.status_detail = payment.get("status_detail")
+            existing_payment.transaction_amount = float(payment.get("transaction_amount", 0))
+            existing_payment.currency_id = payment.get("currency_id", "ARS")
+            existing_payment.payment_method_id = payment_method_id
+            existing_payment.payment_type_id = payment_type_id
+            existing_payment.card_last_four_digits = card_last_four
+            existing_payment.card_holder_name = card_holder
+            existing_payment.refunded_amount = refunded_amount
+            existing_payment.refunded_count = refunded_count
+            existing_payment.has_chargeback = has_chargeback
+            if date_created:
+                existing_payment.date_created = date_created
+            if date_approved:
+                existing_payment.date_approved = date_approved
+            if date_last_updated:
+                existing_payment.date_last_updated = date_last_updated
+            existing_payment.mp_raw_data = json.dumps(payment)
+            db_payment = existing_payment
+        else:
+            # Crear nuevo registro de Payment
+            order_id = None
+            if external_reference:
+                order = db.query(Order).filter(Order.external_reference == external_reference).first()
+                if order:
+                    order_id = order.id
+            
+            db_payment = Payment(
+                order_id=order_id,
+                mp_payment_id=resource_id,
+                transaction_amount=float(payment.get("transaction_amount", 0)),
+                currency_id=payment.get("currency_id", "ARS"),
+                payment_method_id=payment_method_id,
+                payment_type_id=payment_type_id,
+                card_last_four_digits=card_last_four,
+                card_holder_name=card_holder,
+                status=payment_status,
+                status_detail=payment.get("status_detail"),
+                refunded_amount=refunded_amount,
+                refunded_count=refunded_count,
+                has_chargeback=has_chargeback,
+                date_created=date_created or dt.utcnow(),
+                date_approved=date_approved,
+                date_last_updated=date_last_updated,
+                mp_raw_data=json.dumps(payment)
+            )
+            db.add(db_payment)
+        
         # Lógica de actualización de orden según status del pago
         if external_reference:
             # Buscar la orden por external_reference
@@ -287,6 +385,10 @@ async def mercadopago_webhook(
                 logger.warning(f"No se encontró orden con external_reference: {external_reference}")
                 logger.info("La orden puede ser creada desde el frontend al recibir la confirmación")
             else:
+                # Actualizar order_id en el payment si no estaba asignado
+                if not db_payment.order_id:
+                    db_payment.order_id = order.id
+                
                 # Actualizar el estado de la orden según el payment_status
                 if payment_status == "approved":
                     logger.info(f"✅ Pago APROBADO para orden {external_reference}")
@@ -320,6 +422,10 @@ async def mercadopago_webhook(
                     logger.warning(f"Status desconocido: {payment_status} para orden {external_reference}")
         else:
             logger.warning("No se recibió external_reference en el pago")
+        
+        # Commit de los cambios en Payment
+        db.commit()
+        logger.info(f"Payment {resource_id} guardado/actualizado en BD")
         
         # SIEMPRE retornar 200 OK a Mercado Pago
         return {"status": "ok"}

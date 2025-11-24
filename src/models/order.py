@@ -11,7 +11,7 @@ class Order(Base):
     id = Column(Integer, primary_key=True, index=True)
     order_number = Column(String(20), unique=True, nullable=True, index=True)  # Número público único (ej: GEPE-ABC123)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
-    status = Column(String(50), default="PENDING")  # PENDING, PAID, CANCELLED, REFUNDED
+    status = Column(String(50), default="PENDING")  # PENDING, PAID, CANCELLED, REFUNDED, IN_PRODUCTION, SHIPPED, DELIVERED
     total_amount = Column(Float, default=0.0)
     external_reference = Column(String(100), nullable=True, index=True)  # Referencia de Mercado Pago
     payment_id = Column(String(100), nullable=True, index=True)  # ID del pago en Mercado Pago
@@ -26,6 +26,7 @@ class Order(Base):
     shipping_method = Column(String(50), nullable=True)  # domicilio, retiro
     shipping_address = Column(String(500), nullable=True)
     shipping_city = Column(String(100), nullable=True)
+    tracking_code = Column(String(100), nullable=True)  # Código de seguimiento (Andreani/Correo Arg)
     
     # Timestamps
     created_at = Column(DateTime, default=datetime.utcnow)
