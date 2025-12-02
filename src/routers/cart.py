@@ -14,6 +14,8 @@ router = APIRouter(prefix="/cart", tags=["cart"])
 class CartItemCreate(BaseModel):
     product_id: int
     quantity: int = 1
+    calidad: str | None = None
+    talle: str | None = None
 
 
 class CartItemOut(BaseModel):
@@ -21,6 +23,8 @@ class CartItemOut(BaseModel):
     product_id: int
     product_name: str
     quantity: int
+    calidad: str | None = None
+    talle: str | None = None
 
     class Config:
         from_attributes = True
@@ -42,6 +46,8 @@ def list_cart_items(db: Session = Depends(get_db)):
                 product_id=item.product_id,
                 product_name=item.product.name if item.product else "",
                 quantity=item.quantity,
+                calidad=item.calidad,
+                talle=item.talle,
             )
         )
     return result
@@ -53,15 +59,25 @@ def add_cart_item(payload: CartItemCreate, db: Session = Depends(get_db)):
     if not product:
         raise HTTPException(status_code=404, detail="Producto no encontrado")
 
+    # Buscar item existente con mismo product_id, calidad y talle
     item = (
         db.query(CartItem)
-        .filter(CartItem.product_id == payload.product_id)
+        .filter(
+            CartItem.product_id == payload.product_id,
+            CartItem.calidad == payload.calidad,
+            CartItem.talle == payload.talle
+        )
         .first()
     )
     if item:
         item.quantity += payload.quantity
     else:
-        item = CartItem(product_id=payload.product_id, quantity=payload.quantity)
+        item = CartItem(
+            product_id=payload.product_id,
+            quantity=payload.quantity,
+            calidad=payload.calidad,
+            talle=payload.talle
+        )
         db.add(item)
 
     db.commit()
@@ -72,6 +88,8 @@ def add_cart_item(payload: CartItemCreate, db: Session = Depends(get_db)):
         product_id=item.product_id,
         product_name=item.product.name if item.product else "",
         quantity=item.quantity,
+        calidad=item.calidad,
+        talle=item.talle,
     )
 
 

@@ -14,6 +14,8 @@ class CartItem(Base):
 
     product_id = Column(Integer, ForeignKey("products.id"), nullable=False)
     quantity = Column(Integer, nullable=False, default=1)
+    calidad = Column(String(50), nullable=True)  # PROFESIONAL, JUGADOR, HINCHA
+    talle = Column(String(20), nullable=True)  # S, M, L, XL, etc.
 
     # Alternativa futura: asociar por sesión anónima
     session_id = Column(String(255), nullable=True, index=True)

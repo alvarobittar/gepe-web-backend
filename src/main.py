@@ -150,6 +150,39 @@ def create_tables():
         except Exception as e:
             logger.warning(f"⚠️ Error durante migración de orders: {e}")
         
+        # Migrar columnas faltantes en cart_items si es necesario
+        try:
+            inspector = inspect(engine)
+            if "cart_items" in inspector.get_table_names():
+                cart_items_columns = {col["name"]: col["type"] for col in inspector.get_columns("cart_items")}
+
+                # Determinar el tipo de columna según la base de datos actual
+                db_url = str(engine.url)
+                if db_url.startswith("sqlite"):
+                    # SQLite usa TEXT en lugar de VARCHAR
+                    required_cart_columns = {
+                        "calidad": "TEXT",
+                        "talle": "TEXT",
+                    }
+                else:
+                    # PostgreSQL y otras bases de datos
+                    required_cart_columns = {
+                        "calidad": "VARCHAR(50)",
+                        "talle": "VARCHAR(20)",
+                    }
+                
+                with engine.connect() as conn:
+                    for col_name, col_type in required_cart_columns.items():
+                        if col_name not in cart_items_columns:
+                            try:
+                                conn.execute(text(f"ALTER TABLE cart_items ADD COLUMN {col_name} {col_type}"))
+                                conn.commit()
+                                logger.info(f"✅ Columna agregada a cart_items: {col_name}")
+                            except Exception as e:
+                                logger.warning(f"⚠️ No se pudo agregar columna {col_name} a cart_items: {e}")
+        except Exception as e:
+            logger.warning(f"⚠️ Error durante migración de cart_items: {e}")
+        
         # Verificar que se crearon correctamente
         inspector = inspect(engine)
         existing_tables = inspector.get_table_names()
