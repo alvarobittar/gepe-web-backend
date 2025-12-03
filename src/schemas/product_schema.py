@@ -34,6 +34,14 @@ class ProductCreate(BaseModel):
     category_id: Optional[int] = None
     slug: Optional[str] = None
     is_active: bool = True
+    price_hincha: Optional[float] = None
+    price_jugador: Optional[float] = None
+    price_profesional: Optional[float] = None
+    preview_image_url: Optional[str] = None
+    image1_url: Optional[str] = None
+    image2_url: Optional[str] = None
+    image3_url: Optional[str] = None
+    image4_url: Optional[str] = None
 
 
 class ProductUpdate(BaseModel):
@@ -45,6 +53,14 @@ class ProductUpdate(BaseModel):
     category_id: Optional[int] = None
     slug: Optional[str] = None
     is_active: Optional[bool] = None
+    price_hincha: Optional[float] = None
+    price_jugador: Optional[float] = None
+    price_profesional: Optional[float] = None
+    preview_image_url: Optional[str] = None
+    image1_url: Optional[str] = None
+    image2_url: Optional[str] = None
+    image3_url: Optional[str] = None
+    image4_url: Optional[str] = None
 
 
 class ProductOut(BaseModel):
@@ -55,6 +71,14 @@ class ProductOut(BaseModel):
     price: float
     gender: Optional[str] = None
     club_name: Optional[str] = None
+    price_hincha: Optional[float] = None
+    price_jugador: Optional[float] = None
+    price_profesional: Optional[float] = None
+    preview_image_url: Optional[str] = None
+    image1_url: Optional[str] = None
+    image2_url: Optional[str] = None
+    image3_url: Optional[str] = None
+    image4_url: Optional[str] = None
     category: Optional[CategoryOut] = None
     size_stocks: Optional[List[ProductSizeStockOut]] = None
     is_active: bool

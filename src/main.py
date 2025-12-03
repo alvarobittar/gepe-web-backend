@@ -33,6 +33,7 @@ from .models.cart import CartItem  # noqa: F401
 from .models.order import Order  # noqa: F401
 from .models.payment import Payment  # noqa: F401
 from .models.promo_banner import PromoBanner  # noqa: F401
+from .models.club import Club  # noqa: F401
 
 settings = get_settings()
 logger.info(f"🔧 CORS_ORIGIN configurado al iniciar: {settings.cors_origin}")
@@ -182,6 +183,42 @@ def create_tables():
                                 logger.warning(f"⚠️ No se pudo agregar columna {col_name} a cart_items: {e}")
         except Exception as e:
             logger.warning(f"⚠️ Error durante migración de cart_items: {e}")
+
+        # Migrar columnas faltantes en products (preview, imágenes, precios por calidad) si es necesario
+        try:
+            inspector = inspect(engine)
+            if "products" in inspector.get_table_names():
+                products_columns = {col["name"]: col["type"] for col in inspector.get_columns("products")}
+
+                db_url = str(engine.url)
+                # Para SQLite usamos TEXT, para otros VARCHAR(500)
+                if db_url.startswith("sqlite"):
+                    img_type = "TEXT"
+                else:
+                    img_type = "VARCHAR(500)"
+
+                required_product_columns = {
+                    "preview_image_url": img_type,
+                    "image1_url": img_type,
+                    "image2_url": img_type,
+                    "image3_url": img_type,
+                    "image4_url": img_type,
+                    "price_hincha": "FLOAT",
+                    "price_jugador": "FLOAT",
+                    "price_profesional": "FLOAT",
+                }
+
+                with engine.connect() as conn:
+                    for col_name, col_type in required_product_columns.items():
+                        if col_name not in products_columns:
+                            try:
+                                conn.execute(text(f"ALTER TABLE products ADD COLUMN {col_name} {col_type}"))
+                                conn.commit()
+                                logger.info(f"✅ Columna agregada a products: {col_name}")
+                            except Exception as e:
+                                logger.warning(f"⚠️ No se pudo agregar columna {col_name} a products: {e}")
+        except Exception as e:
+            logger.warning(f"⚠️ Error durante migración de products: {e}")
         
         # Verificar que se crearon correctamente
         inspector = inspect(engine)

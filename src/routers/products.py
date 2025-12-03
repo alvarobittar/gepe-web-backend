@@ -207,15 +207,31 @@ def create_product(product_data: ProductCreate, db: Session = Depends(get_db)):
         if not category:
             raise HTTPException(status_code=404, detail="Categoría no encontrada")
     
+    # Determinar precios por calidad
+    price_hincha = product_data.price_hincha if product_data.price_hincha is not None else product_data.price
+    price_jugador = product_data.price_jugador
+    price_profesional = product_data.price_profesional
+
+    # El campo price base lo usamos como precio "hincha" para compatibilidad
+    base_price = price_hincha or product_data.price
+
     product = Product(
         name=product_data.name,
         slug=slug,
         description=product_data.description,
-        price=product_data.price,
+        price=base_price,
         gender=product_data.gender,
         club_name=product_data.club_name,
         category_id=product_data.category_id,
         is_active=product_data.is_active,
+        price_hincha=price_hincha,
+        price_jugador=price_jugador,
+        price_profesional=price_profesional,
+        preview_image_url=product_data.preview_image_url,
+        image1_url=product_data.image1_url,
+        image2_url=product_data.image2_url,
+        image3_url=product_data.image3_url,
+        image4_url=product_data.image4_url,
     )
     
     db.add(product)
@@ -270,6 +286,24 @@ def update_product(
         product.slug = product_data.slug
     if product_data.is_active is not None:
         product.is_active = product_data.is_active
+    if product_data.price_hincha is not None:
+        product.price_hincha = product_data.price_hincha
+        # Mantener price base alineado con el precio hincha
+        product.price = product_data.price_hincha
+    if product_data.price_jugador is not None:
+        product.price_jugador = product_data.price_jugador
+    if product_data.price_profesional is not None:
+        product.price_profesional = product_data.price_profesional
+    if product_data.preview_image_url is not None:
+        product.preview_image_url = product_data.preview_image_url
+    if product_data.image1_url is not None:
+        product.image1_url = product_data.image1_url
+    if product_data.image2_url is not None:
+        product.image2_url = product_data.image2_url
+    if product_data.image3_url is not None:
+        product.image3_url = product_data.image3_url
+    if product_data.image4_url is not None:
+        product.image4_url = product_data.image4_url
     
     db.commit()
     db.refresh(product)

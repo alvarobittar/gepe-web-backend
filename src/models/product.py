@@ -22,7 +22,14 @@ class Product(Base):
     slug = Column(String(200), unique=True, index=True, nullable=False)
     description = Column(String(1000), nullable=True)
 
+    # Precio base (lo usamos como fallback / compatibilidad, por defecto igual al precio "hincha")
     price = Column(Float, nullable=False)
+
+    # Precios por calidad
+    price_hincha = Column(Float, nullable=True)
+    price_jugador = Column(Float, nullable=True)
+    price_profesional = Column(Float, nullable=True)
+
     stock = Column(Integer, default=0)
 
     # hombre / mujer / unisex, etc.
@@ -30,6 +37,13 @@ class Product(Base):
 
     # Nombre del club asociado (string simple por ahora)
     club_name = Column(String(200), index=True, nullable=True)
+
+    # Imágenes del producto
+    preview_image_url = Column(String(500), nullable=True)
+    image1_url = Column(String(500), nullable=True)
+    image2_url = Column(String(500), nullable=True)
+    image3_url = Column(String(500), nullable=True)
+    image4_url = Column(String(500), nullable=True)
 
     is_active = Column(Boolean, default=True)
 
