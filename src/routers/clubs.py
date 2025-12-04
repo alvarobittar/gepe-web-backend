@@ -40,6 +40,10 @@ def list_clubs(
         default=None,
         description="Filtrar por slug exacto del club",
     ),
+    only_active: bool = Query(
+        default=False,
+        description="Si es True, devuelve solo los clubes activos",
+    ),
     db: Session = Depends(get_db),
 ):
     """
@@ -50,6 +54,8 @@ def list_clubs(
         query = query.filter(Club.city_key == city_key)
     if slug:
         query = query.filter(Club.slug == slug)
+    if only_active:
+        query = query.filter(Club.is_active == True)
     clubs = query.order_by(Club.name.asc()).all()
     return clubs
 
@@ -89,6 +95,8 @@ def create_club(payload: ClubCreate, db: Session = Depends(get_db)):
         slug=slug,
         city_key=payload.city_key,
         crest_image_url=payload.crest_image_url,
+        display_name=payload.display_name.strip() if payload.display_name else None,
+        is_active=payload.is_active,
     )
 
     db.add(club)
@@ -155,6 +163,15 @@ def update_club(club_id: int, payload: ClubUpdate, db: Session = Depends(get_db)
     # Actualizar escudo si se envía (puede ser None explícito para limpiar)
     if "crest_image_url" in data:
         club.crest_image_url = data["crest_image_url"]
+
+    # Actualizar display_name si se envía
+    if "display_name" in data:
+        val = data["display_name"]
+        club.display_name = val.strip() if val else None
+
+    # Actualizar is_active si se envía
+    if "is_active" in data:
+        club.is_active = data["is_active"]
 
     db.add(club)
     db.commit()
