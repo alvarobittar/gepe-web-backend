@@ -6,6 +6,7 @@ python-dotenv~=1.0.1
 # Database
 sqlalchemy~=2.0.0
 psycopg2-binary~=2.9.0
+alembic~=1.13.0
 
 # Mercado Pago SDK
 mercadopago~=2.2.0
@@ -13,3 +14,6 @@ mercadopago~=2.2.0
 # Pydantic (usually comes with FastAPI, but explicit for clarity)
 pydantic~=2.0.0
 email-validator~=2.0.0
+
+# Image storage (Cloudinary)
+cloudinary~=1.36.0

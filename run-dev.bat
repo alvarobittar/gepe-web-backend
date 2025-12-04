@@ -57,6 +57,16 @@ if errorlevel 1 (
     )
 )
 
+REM Aplicar migraciones de Alembic automáticamente
+echo.
+echo [INFO] Aplicando migraciones de base de datos...
+.venv\Scripts\alembic upgrade head
+if errorlevel 1 (
+    echo [WARN] Hubo un problema al aplicar las migraciones.
+    echo [INFO] Continuando de todas formas...
+)
+echo.
+
 REM Ejecutar uvicorn con el Python del venv
 REM Usar start /b para ejecutar en segundo plano y evitar que el script termine
 echo [INFO] Iniciando backend FastAPI...

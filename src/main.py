@@ -28,6 +28,7 @@ clear_settings_cache()
 # Importar todos los modelos para que SQLAlchemy los registre antes de create_all()
 # Esto asegura que todas las tablas se creen correctamente
 from .models.product import Product, Category, ProductSizeStock  # noqa: F401
+from .models.product_price_settings import ProductPriceSettings  # noqa: F401
 from .models.user import User  # noqa: F401
 from .models.cart import CartItem  # noqa: F401
 from .models.order import Order  # noqa: F401
@@ -219,6 +220,26 @@ def create_tables():
                                 logger.warning(f"⚠️ No se pudo agregar columna {col_name} a products: {e}")
         except Exception as e:
             logger.warning(f"⚠️ Error durante migración de products: {e}")
+
+        # Inicializar precios globales si la tabla existe pero está vacía
+        try:
+            from .models.product_price_settings import ProductPriceSettings
+            inspector = inspect(engine)
+            if "product_price_settings" in inspector.get_table_names():
+                with engine.connect() as conn:
+                    existing_settings = conn.execute(
+                        text("SELECT id FROM product_price_settings WHERE id = 1")
+                    ).fetchone()
+                    if not existing_settings:
+                        logger.info("Creando valores por defecto para precios globales...")
+                        conn.execute(text(
+                            "INSERT INTO product_price_settings (id, price_hincha, price_jugador, price_profesional) "
+                            "VALUES (1, 59900.0, 69900.0, 89900.0)"
+                        ))
+                        conn.commit()
+                        logger.info("✅ Valores por defecto para precios globales creados")
+        except Exception as e:
+            logger.warning(f"⚠️ Error durante inicialización de precios globales: {e}")
         
         # Verificar que se crearon correctamente
         inspector = inspect(engine)

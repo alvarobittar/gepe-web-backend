@@ -1,6 +1,6 @@
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
 from sqlalchemy.orm import Session
 
 from ..database import get_db
@@ -193,4 +193,23 @@ def delete_club(club_id: int, db: Session = Depends(get_db)):
     db.delete(club)
     db.commit()
     return None
+
+
+@router.post("/upload-crest")
+async def upload_club_crest(file: UploadFile = File(...)):
+    """
+    Subir un escudo de club a Cloudinary.
+    
+    Devuelve la URL pública del escudo subido.
+    """
+    from ..services.cloudinary_service import upload_club_crest as upload_fn
+    
+    if not file.content_type or not file.content_type.startswith("image/"):
+        raise HTTPException(status_code=400, detail="El archivo debe ser una imagen")
+    
+    try:
+        result = await upload_fn(file)
+        return {"url": result["url"]}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error al subir el escudo: {str(e)}")
 
