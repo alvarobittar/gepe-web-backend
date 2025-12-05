@@ -48,17 +48,21 @@ allowed_origins = [
     "http://localhost:3001",
 ]
 
+# Verificar si CORS_ORIGIN está realmente configurado (no es el default)
+cors_origin_env = os.getenv("CORS_ORIGIN", "")
+cors_origin_configured = cors_origin_env and cors_origin_env != "http://localhost:3000"
+
 # Agregar CORS_ORIGIN del .env si está configurado y no está duplicado
-if settings.cors_origin:
+if cors_origin_configured:
     # Permitir múltiples orígenes separados por coma
-    cors_origins = [origin.strip() for origin in settings.cors_origin.split(",")]
+    cors_origins = [origin.strip() for origin in cors_origin_env.split(",")]
     for origin in cors_origins:
         if origin and origin not in allowed_origins:
             allowed_origins.append(origin)
 
-# En producción, permitir todos los orígenes si no hay CORS_ORIGIN configurado
+# En producción, permitir todos los orígenes si no hay CORS_ORIGIN configurado explícitamente
 # Esto es necesario para Railway donde el frontend puede estar en diferentes dominios
-if settings.environment == "production" and not settings.cors_origin:
+if settings.environment == "production" and not cors_origin_configured:
     logger.warning("⚠️ CORS_ORIGIN no configurado en producción, permitiendo todos los orígenes")
     allowed_origins = ["*"]
 
@@ -270,8 +274,12 @@ def create_tables():
         logger.error(f"❌ ERROR al crear tablas: {str(e)}", exc_info=True)
         raise
 
-# Crear tablas al iniciar
-create_tables()
+# Crear tablas al iniciar (no bloquear el inicio si falla)
+try:
+    create_tables()
+except Exception as e:
+    logger.error(f"❌ Error al crear tablas al iniciar: {str(e)}", exc_info=True)
+    logger.warning("⚠️ El servidor continuará iniciando, pero algunas funcionalidades pueden no estar disponibles")
 
 # Include routers
 app.include_router(products.router, prefix="/api")
