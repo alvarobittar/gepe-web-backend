@@ -49,12 +49,24 @@ allowed_origins = [
 ]
 
 # Agregar CORS_ORIGIN del .env si está configurado y no está duplicado
-if settings.cors_origin and settings.cors_origin not in allowed_origins:
-    allowed_origins.append(settings.cors_origin)
+if settings.cors_origin:
+    # Permitir múltiples orígenes separados por coma
+    cors_origins = [origin.strip() for origin in settings.cors_origin.split(",")]
+    for origin in cors_origins:
+        if origin and origin not in allowed_origins:
+            allowed_origins.append(origin)
+
+# En producción, permitir todos los orígenes si no hay CORS_ORIGIN configurado
+# Esto es necesario para Railway donde el frontend puede estar en diferentes dominios
+if settings.environment == "production" and not settings.cors_origin:
+    logger.warning("⚠️ CORS_ORIGIN no configurado en producción, permitiendo todos los orígenes")
+    allowed_origins = ["*"]
+
+logger.info(f"🌐 Orígenes CORS permitidos: {allowed_origins}")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=allowed_origins,
+    allow_origins=allowed_origins if "*" not in allowed_origins else ["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
