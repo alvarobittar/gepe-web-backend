@@ -42,6 +42,7 @@ run-backend.bat
 .coverage
 htmlcov/
 .tox/
+run-dev.bat
 
 # Distribución
 dist/
