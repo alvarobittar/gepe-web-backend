@@ -75,13 +75,17 @@ def _list_products_impl(
     offset: int = 0,
     limit: int = 20,
     db: Session = None,
+    include_inactive: bool = False,
 ):
     """
     Implementación compartida para listar productos.
     """
     _ensure_sample_data(db)
 
-    query = db.query(Product).filter(Product.is_active.is_(True))
+    query = db.query(Product)
+    # Solo filtrar por is_active si no se incluyen inactivos (para admin)
+    if not include_inactive:
+        query = query.filter(Product.is_active.is_(True))
 
     if q:
         like = f"%{q.lower()}%"
@@ -110,13 +114,15 @@ def list_products_no_slash(
     category: Optional[str] = Query(default=None, description="Slug de categoría"),
     offset: int = Query(0, ge=0, description="Desplazamiento para paginación (número de items a saltar)"),
     limit: int = Query(20, ge=1, le=100, description="Cantidad máxima de productos a devolver"),
+    include_inactive: bool = Query(default=False, description="Incluir productos inactivos (para admin)"),
     db: Session = Depends(get_db),
 ):
     """
     Listado de productos con filtros opcionales por texto, género y categoría.
     La búsqueda por texto matchea contra nombre de producto y club_name.
+    Por defecto solo muestra productos activos. Use include_inactive=true para ver todos.
     """
-    return _list_products_impl(q, gender, category, offset, limit, db)
+    return _list_products_impl(q, gender, category, offset, limit, db, include_inactive)
 
 
 @router.get("/", response_model=List[ProductOut])
@@ -126,13 +132,15 @@ def list_products(
     category: Optional[str] = Query(default=None, description="Slug de categoría"),
     offset: int = Query(0, ge=0, description="Desplazamiento para paginación (número de items a saltar)"),
     limit: int = Query(20, ge=1, le=100, description="Cantidad máxima de productos a devolver"),
+    include_inactive: bool = Query(default=False, description="Incluir productos inactivos (para admin)"),
     db: Session = Depends(get_db),
 ):
     """
     Listado de productos con filtros opcionales por texto, género y categoría.
     La búsqueda por texto matchea contra nombre de producto y club_name.
+    Por defecto solo muestra productos activos. Use include_inactive=true para ver todos.
     """
-    return _list_products_impl(q, gender, category, offset, limit, db)
+    return _list_products_impl(q, gender, category, offset, limit, db, include_inactive)
 
 
 @router.get("/price-settings", response_model=ProductPriceSettingsOut)
