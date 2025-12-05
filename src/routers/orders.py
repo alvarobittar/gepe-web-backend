@@ -604,3 +604,4 @@ async def get_payment_stats(
             detail=f"Error al obtener estadísticas de pagos: {str(e)}"
         )
 
+
