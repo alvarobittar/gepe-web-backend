@@ -39,7 +39,7 @@ from .models.club import Club  # noqa: F401
 settings = get_settings()
 logger.info(f"🔧 CORS_ORIGIN configurado al iniciar: {settings.cors_origin}")
 
-app = FastAPI(title="GEPE Web Backend", version="0.1.0")
+app = FastAPI(title="GEPE Web Backend", version="0.1.0", redirect_slashes=False)
 
 # Configurar CORS
 # Construir lista de orígenes permitidos dinámicamente
@@ -311,3 +311,10 @@ async def ping():
     import time
     logger.info(f"🏓 Ping recibido a las {time.time()}")
     return {"pong": True, "time": time.time()}
+
+
+@app.get("/favicon.ico", tags=["static"])
+async def favicon():
+    """Handle favicon.ico requests - return 204 No Content"""
+    from fastapi.responses import Response
+    return Response(status_code=204)
