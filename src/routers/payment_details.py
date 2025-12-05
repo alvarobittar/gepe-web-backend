@@ -311,6 +311,51 @@ async def refund_payment(
         )
 
 
+def _list_payments_impl(
+    status_filter: Optional[str] = None,
+    skip: int = 0,
+    limit: int = 100,
+    db: Session = None
+):
+    """
+    Implementación compartida para listar pagos.
+    """
+    query = db.query(Payment).options(joinedload(Payment.order))
+    
+    if status_filter:
+        query = query.filter(Payment.status == status_filter)
+    
+    payments = query.order_by(desc(Payment.date_created)).offset(skip).limit(limit).all()
+    
+    result = []
+    for payment in payments:
+        # Obtener información del pedido relacionado si existe
+        order_number = None
+        customer_email = None
+        
+        if payment.order:
+            order_number = payment.order.order_number
+            customer_email = payment.order.customer_email
+        
+        payment_dict = {
+            "id": payment.id,
+            "mp_payment_id": payment.mp_payment_id,
+            "transaction_amount": payment.transaction_amount,
+            "currency_id": payment.currency_id,
+            "payment_method_label": get_payment_method_label(payment),
+            "status": payment.status,
+            "date_created": payment.date_created,
+            "date_approved": payment.date_approved,
+            "refunded_amount": payment.refunded_amount,
+            "has_chargeback": payment.has_chargeback,
+            "order_number": order_number,
+            "customer_email": customer_email,
+        }
+        result.append(PaymentListOut(**payment_dict))
+    
+    return result
+
+
 @router.get("/payments", response_model=List[PaymentListOut])
 async def list_payments(
     status_filter: Optional[str] = Query(None, description="Filtrar por estado: approved, pending, rejected, cancelled, refunded"),
@@ -323,41 +368,7 @@ async def list_payments(
     Enfocado en auditoría financiera (no muestra detalles de productos).
     """
     try:
-        query = db.query(Payment).options(joinedload(Payment.order))
-        
-        if status_filter:
-            query = query.filter(Payment.status == status_filter)
-        
-        payments = query.order_by(desc(Payment.date_created)).offset(skip).limit(limit).all()
-        
-        result = []
-        for payment in payments:
-            # Obtener información del pedido relacionado si existe
-            order_number = None
-            customer_email = None
-            
-            if payment.order:
-                order_number = payment.order.order_number
-                customer_email = payment.order.customer_email
-            
-            payment_dict = {
-                "id": payment.id,
-                "mp_payment_id": payment.mp_payment_id,
-                "transaction_amount": payment.transaction_amount,
-                "currency_id": payment.currency_id,
-                "payment_method_label": get_payment_method_label(payment),
-                "status": payment.status,
-                "date_created": payment.date_created,
-                "date_approved": payment.date_approved,
-                "refunded_amount": payment.refunded_amount,
-                "has_chargeback": payment.has_chargeback,
-                "order_number": order_number,
-                "customer_email": customer_email,
-            }
-            result.append(PaymentListOut(**payment_dict))
-        
-        return result
-        
+        return _list_payments_impl(status_filter, skip, limit, db)
     except Exception as e:
         logger.error(f"Error al obtener pagos: {str(e)}", exc_info=True)
         raise HTTPException(

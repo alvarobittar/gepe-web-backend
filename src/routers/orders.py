@@ -149,6 +149,55 @@ async def create_order(
         )
 
 
+def _list_orders_impl(
+    status_filter: str = None,
+    skip: int = 0,
+    limit: int = 100,
+    db: Session = None
+):
+    """
+    Implementación compartida para listar órdenes.
+    """
+    query = db.query(Order).options(joinedload(Order.items))
+    
+    if status_filter:
+        query = query.filter(Order.status == status_filter)
+    
+    orders = query.order_by(Order.created_at.desc()).offset(skip).limit(limit).all()
+    
+    # Agregar count de items y nombre del primer producto a cada orden
+    result = []
+    for order in orders:
+        # Obtener el nombre del primer producto para vista previa
+        first_product_name = None
+        if order.items and len(order.items) > 0:
+            first_product_name = order.items[0].product_name
+            # Si hay más de un producto, agregar indicador
+            if len(order.items) > 1:
+                first_product_name += f" y {len(order.items) - 1} más"
+        
+        order_dict = {
+            "id": order.id,
+            "order_number": order.order_number,
+            "customer_email": order.customer_email,
+            "customer_name": order.customer_name,
+            "status": order.status,
+            "total_amount": order.total_amount,
+            "created_at": order.created_at,
+            "items_count": len(order.items),
+            "first_product_name": first_product_name,
+            "payment_id": order.payment_id,
+            "external_reference": order.external_reference,
+            "shipping_method": order.shipping_method,
+            "shipping_address": order.shipping_address,
+            "shipping_city": order.shipping_city,
+            "tracking_code": order.tracking_code
+        }
+        result.append(OrderListOut(**order_dict))
+    
+    return result
+
+
 @router.get("/orders", response_model=List[OrderListOut])
 async def list_orders(
     status_filter: str = None,
@@ -163,45 +212,7 @@ async def list_orders(
     - Puede filtrar por status: PENDING, PAID, CANCELLED, REFUNDED
     """
     try:
-        query = db.query(Order).options(joinedload(Order.items))
-        
-        if status_filter:
-            query = query.filter(Order.status == status_filter)
-        
-        orders = query.order_by(Order.created_at.desc()).offset(skip).limit(limit).all()
-        
-        # Agregar count de items y nombre del primer producto a cada orden
-        result = []
-        for order in orders:
-            # Obtener el nombre del primer producto para vista previa
-            first_product_name = None
-            if order.items and len(order.items) > 0:
-                first_product_name = order.items[0].product_name
-                # Si hay más de un producto, agregar indicador
-                if len(order.items) > 1:
-                    first_product_name += f" y {len(order.items) - 1} más"
-            
-            order_dict = {
-                "id": order.id,
-                "order_number": order.order_number,  # Incluir order_number
-                "customer_email": order.customer_email,
-                "customer_name": order.customer_name,
-                "status": order.status,
-                "total_amount": order.total_amount,
-                "created_at": order.created_at,
-                "items_count": len(order.items),
-                "first_product_name": first_product_name,
-                "payment_id": order.payment_id,
-                "external_reference": order.external_reference,
-                "shipping_method": order.shipping_method,
-                "shipping_address": order.shipping_address,
-                "shipping_city": order.shipping_city,
-                "tracking_code": order.tracking_code
-            }
-            result.append(OrderListOut(**order_dict))
-        
-        return result
-        
+        return _list_orders_impl(status_filter, skip, limit, db)
     except Exception as e:
         logger.error(f"Error al listar órdenes: {str(e)}", exc_info=True)
         raise HTTPException(
