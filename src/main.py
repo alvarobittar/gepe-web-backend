@@ -306,6 +306,13 @@ async def health():
     return {"status": "ok", "server": "alive"}
 
 
+@app.get("/api/ping", tags=["health"])  # Super simple test
+async def ping():
+    import time
+    logger.info(f"🏓 Ping recibido a las {time.time()}")
+    return {"pong": True, "time": time.time()}
+
+
 # Middleware para loggear TODAS las requests
 @app.middleware("http")
 async def log_requests(request, call_next):
