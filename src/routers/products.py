@@ -414,6 +414,8 @@ def delete_product(product_id: int, db: Session = Depends(get_db)):
     Eliminar físicamente un producto.
     Solo se puede eliminar si el producto está inactivo.
     """
+    from ..models.cart import CartItem
+    
     product = db.query(Product).filter(Product.id == product_id).first()
     if not product:
         raise HTTPException(status_code=404, detail="Producto no encontrado")
@@ -424,6 +426,14 @@ def delete_product(product_id: int, db: Session = Depends(get_db)):
             status_code=400, 
             detail="No se puede eliminar un producto activo. Primero debes desactivarlo."
         )
+    
+    # Eliminar primero los items del carrito asociados (tiene ForeignKey constraint)
+    cart_items = db.query(CartItem).filter(CartItem.product_id == product_id).all()
+    for cart_item in cart_items:
+        db.delete(cart_item)
+    
+    # ProductSizeStock se eliminará automáticamente por cascade
+    # OrderItem no tiene ForeignKey constraint, así que no causa problemas
     
     # Hard delete: eliminar físicamente el producto
     db.delete(product)
