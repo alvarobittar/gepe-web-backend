@@ -138,13 +138,26 @@ def get_dashboard_stats(db: Session = Depends(get_db)):
         # --- Clientes nuevos (últimos 30 días) ---
         thirty_days_ago = datetime.utcnow() - timedelta(days=30)
         try:
-            new_customers = db.query(func.count(User.id)).filter(
-                User.created_at >= thirty_days_ago
-            ).scalar() or 0
+            # Primero verificar si la columna created_at existe
+            from sqlalchemy import inspect
+            inspector = inspect(db.bind)
+            user_columns = [col["name"] for col in inspector.get_columns("users")]
+            
+            if "created_at" in user_columns:
+                new_customers = db.query(func.count(User.id)).filter(
+                    User.created_at >= thirty_days_ago
+                ).scalar() or 0
+            else:
+                # Si la columna no existe, contar todos los usuarios
+                new_customers = db.query(func.count(User.id)).scalar() or 0
         except Exception as e:
             logger.warning(f"Error al contar clientes nuevos: {e}")
-            # Si la columna created_at no existe, contar todos los usuarios
-            new_customers = db.query(func.count(User.id)).scalar() or 0
+            # Rollback para limpiar la transacción fallida en PostgreSQL
+            db.rollback()
+            try:
+                new_customers = db.query(func.count(User.id)).scalar() or 0
+            except Exception:
+                new_customers = 0
         
         # --- Top productos vendidos (basado en OrderItems de pedidos PAID) ---
         top_products = []
