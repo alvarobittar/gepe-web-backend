@@ -27,6 +27,7 @@ RUN cp run-dev.bat /usr/local/bin/run-dev.bat && chmod +x /usr/local/bin/run-dev
 # Exponer el puerto (Railway lo configurará automáticamente)
 EXPOSE 8000
 
-# Comando de inicio - usar CMD para mayor compatibilidad
-CMD ["./start.sh"]
+# Comando de inicio - ejecutar directamente sin script wrapper
+# Usar shell form para expandir variables de entorno
+CMD python -m uvicorn src.main:app --host 0.0.0.0 --port ${PORT:-8000} --log-level info --timeout-keep-alive 300 --timeout-graceful-shutdown 30
 
