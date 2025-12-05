@@ -68,18 +68,16 @@ def _ensure_sample_data(db: Session) -> None:
     db.commit()
 
 
-@router.get("/", response_model=List[ProductOut])
-def list_products(
-    q: Optional[str] = Query(default=None, description="Buscar por nombre de prenda o club"),
-    gender: Optional[str] = Query(default=None, description="Filtrar por género (hombre/mujer)"),
-    category: Optional[str] = Query(default=None, description="Slug de categoría"),
-    offset: int = Query(0, ge=0, description="Desplazamiento para paginación (número de items a saltar)"),
-    limit: int = Query(20, ge=1, le=100, description="Cantidad máxima de productos a devolver"),
-    db: Session = Depends(get_db),
+def _list_products_impl(
+    q: Optional[str] = None,
+    gender: Optional[str] = None,
+    category: Optional[str] = None,
+    offset: int = 0,
+    limit: int = 20,
+    db: Session = None,
 ):
     """
-    Listado de productos con filtros opcionales por texto, género y categoría.
-    La búsqueda por texto matchea contra nombre de producto y club_name.
+    Implementación compartida para listar productos.
     """
     _ensure_sample_data(db)
 
@@ -103,6 +101,38 @@ def list_products(
     
     products = query.order_by(Product.id.desc()).offset(offset).limit(limit).all()
     return products
+
+
+@router.get("", response_model=List[ProductOut])
+def list_products_no_slash(
+    q: Optional[str] = Query(default=None, description="Buscar por nombre de prenda o club"),
+    gender: Optional[str] = Query(default=None, description="Filtrar por género (hombre/mujer)"),
+    category: Optional[str] = Query(default=None, description="Slug de categoría"),
+    offset: int = Query(0, ge=0, description="Desplazamiento para paginación (número de items a saltar)"),
+    limit: int = Query(20, ge=1, le=100, description="Cantidad máxima de productos a devolver"),
+    db: Session = Depends(get_db),
+):
+    """
+    Listado de productos con filtros opcionales por texto, género y categoría.
+    La búsqueda por texto matchea contra nombre de producto y club_name.
+    """
+    return _list_products_impl(q, gender, category, offset, limit, db)
+
+
+@router.get("/", response_model=List[ProductOut])
+def list_products(
+    q: Optional[str] = Query(default=None, description="Buscar por nombre de prenda o club"),
+    gender: Optional[str] = Query(default=None, description="Filtrar por género (hombre/mujer)"),
+    category: Optional[str] = Query(default=None, description="Slug de categoría"),
+    offset: int = Query(0, ge=0, description="Desplazamiento para paginación (número de items a saltar)"),
+    limit: int = Query(20, ge=1, le=100, description="Cantidad máxima de productos a devolver"),
+    db: Session = Depends(get_db),
+):
+    """
+    Listado de productos con filtros opcionales por texto, género y categoría.
+    La búsqueda por texto matchea contra nombre de producto y club_name.
+    """
+    return _list_products_impl(q, gender, category, offset, limit, db)
 
 
 @router.get("/price-settings", response_model=ProductPriceSettingsOut)
