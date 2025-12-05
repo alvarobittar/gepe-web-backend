@@ -199,6 +199,7 @@ def _list_orders_impl(
 
 
 @router.get("/orders", response_model=List[OrderListOut])
+@router.get("/orders/", response_model=List[OrderListOut])
 async def list_orders(
     status_filter: str = None,
     skip: int = 0,

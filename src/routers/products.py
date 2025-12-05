@@ -402,13 +402,23 @@ def update_product(
 
 @router.delete("/{product_id}")
 def delete_product(product_id: int, db: Session = Depends(get_db)):
-    """Eliminar/desactivar un producto (soft delete)"""
+    """
+    Eliminar físicamente un producto.
+    Solo se puede eliminar si el producto está inactivo.
+    """
     product = db.query(Product).filter(Product.id == product_id).first()
     if not product:
         raise HTTPException(status_code=404, detail="Producto no encontrado")
     
-    # Soft delete: marcar como inactivo
-    product.is_active = False
+    # Solo se puede eliminar si está inactivo
+    if product.is_active:
+        raise HTTPException(
+            status_code=400, 
+            detail="No se puede eliminar un producto activo. Primero debes desactivarlo."
+        )
+    
+    # Hard delete: eliminar físicamente el producto
+    db.delete(product)
     db.commit()
     
     return {"message": "Producto eliminado correctamente"}

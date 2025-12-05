@@ -357,6 +357,7 @@ def _list_payments_impl(
 
 
 @router.get("/payments", response_model=List[PaymentListOut])
+@router.get("/payments/", response_model=List[PaymentListOut])
 async def list_payments(
     status_filter: Optional[str] = Query(None, description="Filtrar por estado: approved, pending, rejected, cancelled, refunded"),
     skip: int = Query(0, ge=0),
