@@ -18,12 +18,15 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 # Hacer ejecutables los scripts de inicio
-# run-dev.bat es requerido porque Railway tiene ese comando guardado en su config
 RUN chmod +x start.sh run-dev.bat
+
+# Copiar run-dev.bat al PATH para que Railway lo encuentre cuando lo ejecute como comando
+# Railway tiene "run-dev.bat" guardado como Start Command en su configuración
+RUN cp run-dev.bat /usr/local/bin/run-dev.bat && chmod +x /usr/local/bin/run-dev.bat
 
 # Exponer el puerto (Railway lo configurará automáticamente)
 EXPOSE 8000
 
-# Comando de inicio
+# Comando de inicio (backup si Railway no usa su Start Command)
 ENTRYPOINT ["./start.sh"]
 
