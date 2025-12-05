@@ -27,7 +27,8 @@ README.md
 .DS_Store
 node_modules
 alembic/versions/__pycache__
-run-dev.bat
+# NO excluir run-dev.bat - Railway lo necesita como start command
+# run-dev.bat
 migrate_sqlite_to_postgres.py
 add_display_name_column.py
 add_is_active_column.py
