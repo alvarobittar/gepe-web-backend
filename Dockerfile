@@ -18,6 +18,5 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 # Usar gunicorn con uvicorn workers para mejor manejo de procesos
-# Railway inyecta PORT automáticamente (default: 8080)
-CMD gunicorn src.main:app --bind 0.0.0.0:${PORT:-8080} --worker-class uvicorn.workers.UvicornWorker --workers 1 --timeout 120 --keep-alive 65
+CMD gunicorn src.main:app --bind 0.0.0.0:${PORT:-8000} --worker-class uvicorn.workers.UvicornWorker --workers 1 --timeout 120 --keep-alive 65
 
