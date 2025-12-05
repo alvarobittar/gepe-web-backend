@@ -110,6 +110,7 @@ def create_tables():
                     "shipping_address": "VARCHAR(500)",
                     "shipping_city": "VARCHAR(100)",
                     "tracking_code": "VARCHAR(100)",
+                    "production_status": "VARCHAR(50)",  # Micro-estado de producción
                     "created_at": "DATETIME",
                     "updated_at": "DATETIME",
                 }

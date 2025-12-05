@@ -10,7 +10,7 @@ from typing import Dict, Any
 import json
 from ..config import get_settings
 from ..database import get_db
-from ..models.order import Order
+from ..models.order import Order, PRODUCTION_STATUS_WAITING_FABRIC
 from ..models.payment import Payment
 from ..schemas.payment_schema import PreferenceInput, PreferenceResponse
 
@@ -394,8 +394,10 @@ async def mercadopago_webhook(
                     logger.info(f"✅ Pago APROBADO para orden {external_reference}")
                     order.status = "PAID"
                     order.payment_id = resource_id
+                    # Auto-asignar estado de producción al pasar a PAID
+                    order.production_status = PRODUCTION_STATUS_WAITING_FABRIC
                     db.commit()
-                    logger.info(f"Orden {order.id} actualizada a PAID")
+                    logger.info(f"Orden {order.id} actualizada a PAID con production_status=WAITING_FABRIC")
                     
                 elif payment_status == "pending":
                     logger.info(f"⏳ Pago PENDIENTE para orden {external_reference} (puede ser Rapipago)")

@@ -4,6 +4,13 @@ from datetime import datetime
 
 from ..database import Base
 
+# Production status constants
+PRODUCTION_STATUS_WAITING_FABRIC = "WAITING_FABRIC"
+PRODUCTION_STATUS_CUTTING = "CUTTING"
+PRODUCTION_STATUS_SEWING = "SEWING"
+PRODUCTION_STATUS_PRINTING = "PRINTING"
+PRODUCTION_STATUS_FINISHED = "FINISHED"
+
 
 class Order(Base):
     __tablename__ = "orders"
@@ -15,6 +22,10 @@ class Order(Base):
     total_amount = Column(Float, default=0.0)
     external_reference = Column(String(100), nullable=True, index=True)  # Referencia de Mercado Pago
     payment_id = Column(String(100), nullable=True, index=True)  # ID del pago en Mercado Pago
+    
+    # Estado de producción (micro-estados para el taller)
+    # WAITING_FABRIC -> CUTTING -> SEWING -> PRINTING -> FINISHED
+    production_status = Column(String(50), nullable=True)
     
     # Datos del cliente
     customer_email = Column(String(255), nullable=True)
@@ -35,6 +46,7 @@ class Order(Base):
     # Relationships
     items = relationship("OrderItem", back_populates="order", cascade="all, delete-orphan")
     user = relationship("User", foreign_keys=[user_id])
+
 
 
 class OrderItem(Base):

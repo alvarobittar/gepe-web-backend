@@ -19,3 +19,6 @@ python-multipart~=0.0.20
 
 # Image storage (Cloudinary)
 cloudinary~=1.36.0
+
+# Email notifications (Resend)
+resend~=0.8.0
