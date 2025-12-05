@@ -49,6 +49,7 @@ class PaymentListOut(BaseModel):
     has_chargeback: str
     order_number: Optional[str] = None
     customer_email: Optional[str] = None
+    customer_name: Optional[str] = None
 
     class Config:
         from_attributes = True

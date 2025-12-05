@@ -151,6 +151,7 @@ async def create_order(
 
 def _list_orders_impl(
     status_filter: str = None,
+    search: str = None,
     skip: int = 0,
     limit: int = 100,
     db: Session = None
@@ -162,6 +163,22 @@ def _list_orders_impl(
     
     if status_filter:
         query = query.filter(Order.status == status_filter)
+
+    if search:
+        search_term = f"%{search.lower()}%"
+        # Búsqueda flexible: ID, número de orden, email, nombre
+        criteria = [
+            Order.order_number.ilike(search_term),
+            Order.customer_email.ilike(search_term),
+            Order.customer_name.ilike(search_term),
+            Order.external_reference.ilike(search_term)
+        ]
+        # Si es numérico, intentar buscar por ID exacto
+        if search.isdigit():
+            criteria.append(Order.id == int(search))
+            
+        from sqlalchemy import or_
+        query = query.filter(or_(*criteria))
     
     orders = query.order_by(Order.created_at.desc()).offset(skip).limit(limit).all()
     
@@ -203,18 +220,20 @@ def _list_orders_impl(
 @router.get("/orders/", response_model=List[OrderListOut])
 async def list_orders(
     status_filter: str = None,
+    search: str = None,
     skip: int = 0,
     limit: int = 100,
     db: Session = Depends(get_db)
 ):
     """
-    Lista todas las órdenes. Opcionalmente filtra por status.
+    Lista todas las órdenes. Opcionalmente filtra por status o texto de búsqueda.
     
     - Para admin: ver todas las órdenes
     - Puede filtrar por status: PENDING, PAID, CANCELLED, REFUNDED
+    - Puede buscar por: ID, número de orden, email, nombre
     """
     try:
-        return _list_orders_impl(status_filter, skip, limit, db)
+        return _list_orders_impl(status_filter, search, skip, limit, db)
     except Exception as e:
         logger.error(f"Error al listar órdenes: {str(e)}", exc_info=True)
         raise HTTPException(

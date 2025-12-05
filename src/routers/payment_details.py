@@ -332,10 +332,12 @@ def _list_payments_impl(
         # Obtener información del pedido relacionado si existe
         order_number = None
         customer_email = None
+        customer_name = None
         
         if payment.order:
             order_number = payment.order.order_number
             customer_email = payment.order.customer_email
+            customer_name = payment.order.customer_name
         
         payment_dict = {
             "id": payment.id,
@@ -350,6 +352,7 @@ def _list_payments_impl(
             "has_chargeback": payment.has_chargeback,
             "order_number": order_number,
             "customer_email": customer_email,
+            "customer_name": customer_name,
         }
         result.append(PaymentListOut(**payment_dict))
     
