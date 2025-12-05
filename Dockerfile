@@ -27,6 +27,6 @@ RUN cp run-dev.bat /usr/local/bin/run-dev.bat && chmod +x /usr/local/bin/run-dev
 # Exponer el puerto (Railway lo configurará automáticamente)
 EXPOSE 8000
 
-# Comando de inicio (backup si Railway no usa su Start Command)
-ENTRYPOINT ["./start.sh"]
+# Comando de inicio - usar CMD para mayor compatibilidad
+CMD ["./start.sh"]
 
