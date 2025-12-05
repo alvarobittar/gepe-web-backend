@@ -296,9 +296,24 @@ app.include_router(payment_details.router, prefix="/api")
 
 @app.get("/", tags=["root"])  # Simple welcome endpoint
 async def root():
+    logger.info("📍 Request recibido en /")
     return {"message": "Bienvenido al backend de GEPE Web"}
 
 
 @app.get("/api/health", tags=["health"])  # Health check for frontend
 async def health():
-    return {"status": "ok"}
+    logger.info("💓 Health check recibido")
+    return {"status": "ok", "server": "alive"}
+
+
+# Middleware para loggear TODAS las requests
+@app.middleware("http")
+async def log_requests(request, call_next):
+    logger.info(f"📨 Request entrante: {request.method} {request.url.path}")
+    try:
+        response = await call_next(request)
+        logger.info(f"📤 Response: {response.status_code} para {request.url.path}")
+        return response
+    except Exception as e:
+        logger.error(f"❌ Error en request {request.url.path}: {str(e)}")
+        raise
