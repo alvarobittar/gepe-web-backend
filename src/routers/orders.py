@@ -14,7 +14,9 @@ from ..config import get_settings
 from ..database import get_db
 from ..models.order import Order, OrderItem, PRODUCTION_STATUS_WAITING_FABRIC, PRODUCTION_STATUS_CUTTING, PRODUCTION_STATUS_SEWING, PRODUCTION_STATUS_PRINTING, PRODUCTION_STATUS_FINISHED
 from ..models.user import User
+from ..models.notification_email import NotificationEmail
 from ..schemas.order_schema import OrderCreate, OrderOut, OrderListOut, OrderUpdate, ProductionStatusUpdate
+from ..services.email_service import send_sale_notification_email
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["orders"])
@@ -137,6 +139,21 @@ async def create_order(
         db.refresh(order)
         
         logger.info(f"Orden creada exitosamente: ID={order.id}, Email={order.customer_email}, Total=${total_amount}")
+        
+        # Enviar notificación por email a los administradores
+        try:
+            admin_emails = db.query(NotificationEmail).filter(
+                NotificationEmail.verified == True
+            ).all()
+            if admin_emails:
+                email_list = [e.email for e in admin_emails]
+                await send_sale_notification_email(order, email_list)
+                logger.info(f"Notificación de venta enviada a {len(email_list)} administradores")
+            else:
+                logger.info("No hay emails de administradores verificados para enviar notificación")
+        except Exception as e:
+            # No bloquear la creación de la orden si falla el envío del email
+            logger.warning(f"Error al enviar notificación de venta (no crítico): {str(e)}")
         
         return order
         

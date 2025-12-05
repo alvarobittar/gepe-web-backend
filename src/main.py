@@ -4,7 +4,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from .routers import products, clubs, stats, cart, user, promo_banner, payments, orders, categories, payment_details
+from .routers import products, clubs, stats, cart, user, promo_banner, payments, orders, categories, payment_details, settings
 from .config import get_settings, clear_settings_cache
 from .database import Base, engine
 
@@ -35,9 +35,10 @@ from .models.order import Order  # noqa: F401
 from .models.payment import Payment  # noqa: F401
 from .models.promo_banner import PromoBanner  # noqa: F401
 from .models.club import Club  # noqa: F401
+from .models.notification_email import NotificationEmail  # noqa: F401
 
-settings = get_settings()
-logger.info(f"🔧 CORS_ORIGIN configurado al iniciar: {settings.cors_origin}")
+app_settings = get_settings()
+logger.info(f"🔧 CORS_ORIGIN configurado al iniciar: {app_settings.cors_origin}")
 
 app = FastAPI(title="GEPE Web Backend", version="0.1.0", redirect_slashes=False)
 
@@ -62,7 +63,7 @@ if cors_origin_configured:
 
 # En producción, permitir todos los orígenes si no hay CORS_ORIGIN configurado explícitamente
 # Esto es necesario para Railway donde el frontend puede estar en diferentes dominios
-if settings.environment == "production" and not cors_origin_configured:
+if app_settings.environment == "production" and not cors_origin_configured:
     logger.warning("⚠️ CORS_ORIGIN no configurado en producción, permitiendo todos los orígenes")
     allowed_origins = ["*"]
 
@@ -293,6 +294,7 @@ app.include_router(payments.router, prefix="/api/payments")
 app.include_router(orders.router, prefix="/api")
 app.include_router(categories.router, prefix="/api")
 app.include_router(payment_details.router, prefix="/api")
+app.include_router(settings.router, prefix="/api")
 
 
 @app.get("/", tags=["root"])  # Simple welcome endpoint
