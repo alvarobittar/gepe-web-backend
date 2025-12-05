@@ -311,16 +311,3 @@ async def ping():
     import time
     logger.info(f"🏓 Ping recibido a las {time.time()}")
     return {"pong": True, "time": time.time()}
-
-
-# Middleware para loggear TODAS las requests
-@app.middleware("http")
-async def log_requests(request, call_next):
-    logger.info(f"📨 Request entrante: {request.method} {request.url.path}")
-    try:
-        response = await call_next(request)
-        logger.info(f"📤 Response: {response.status_code} para {request.url.path}")
-        return response
-    except Exception as e:
-        logger.error(f"❌ Error en request {request.url.path}: {str(e)}")
-        raise
