@@ -30,6 +30,48 @@ def _slugify(name: str) -> str:
     return slug
 
 
+def _list_clubs_impl(
+    city_key: Optional[str] = None,
+    slug: Optional[str] = None,
+    only_active: bool = False,
+    db: Session = None,
+):
+    """
+    Implementación compartida para listar clubes.
+    """
+    query = db.query(Club)
+    if city_key:
+        query = query.filter(Club.city_key == city_key)
+    if slug:
+        query = query.filter(Club.slug == slug)
+    if only_active:
+        query = query.filter(Club.is_active == True)
+    clubs = query.order_by(Club.name.asc()).all()
+    return clubs
+
+
+@router.get("", response_model=List[ClubOut])
+def list_clubs_no_slash(
+    city_key: Optional[str] = Query(
+        default=None,
+        description="Filtrar por ciudad (sanRafael, generalAlvear, malargue, sanLuis, mendoza, neuquen)",
+    ),
+    slug: Optional[str] = Query(
+        default=None,
+        description="Filtrar por slug exacto del club",
+    ),
+    only_active: bool = Query(
+        default=False,
+        description="Si es True, devuelve solo los clubes activos",
+    ),
+    db: Session = Depends(get_db),
+):
+    """
+    Listado de clubes, opcionalmente filtrados por ciudad y/o slug.
+    """
+    return _list_clubs_impl(city_key, slug, only_active, db)
+
+
 @router.get("/", response_model=List[ClubOut])
 def list_clubs(
     city_key: Optional[str] = Query(
@@ -49,15 +91,7 @@ def list_clubs(
     """
     Listado de clubes, opcionalmente filtrados por ciudad y/o slug.
     """
-    query = db.query(Club)
-    if city_key:
-        query = query.filter(Club.city_key == city_key)
-    if slug:
-        query = query.filter(Club.slug == slug)
-    if only_active:
-        query = query.filter(Club.is_active == True)
-    clubs = query.order_by(Club.name.asc()).all()
-    return clubs
+    return _list_clubs_impl(city_key, slug, only_active, db)
 
 
 @router.post("/", response_model=ClubOut, status_code=201)
