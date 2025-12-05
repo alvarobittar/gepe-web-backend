@@ -17,16 +17,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copiar el resto del código
 COPY . .
 
-# Hacer ejecutables los scripts de inicio
-RUN chmod +x start.sh run-dev.bat entrypoint.sh
+# Railway inyecta PORT como variable de entorno
+ENV PORT=8080
 
-# Copiar run-dev.bat al PATH para que Railway lo encuentre cuando lo ejecute como comando
-# Railway tiene "run-dev.bat" guardado como Start Command en su configuración
-RUN cp run-dev.bat /usr/local/bin/run-dev.bat && chmod +x /usr/local/bin/run-dev.bat
-
-# Exponer el puerto (Railway lo configurará automáticamente)
-EXPOSE 8000
-
-# Comando de inicio - usar entrypoint.sh que mantiene el proceso vivo
-CMD ["./entrypoint.sh"]
+# Comando de inicio - shell form para que interprete la variable $PORT
+CMD python -m uvicorn src.main:app --host 0.0.0.0 --port $PORT
 
