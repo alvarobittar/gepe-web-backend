@@ -17,11 +17,13 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copiar el resto del código
 COPY . .
 
+# Hacer ejecutable el script de inicio
+RUN chmod +x start.sh
+
 # Exponer el puerto (Railway lo configurará automáticamente)
 EXPOSE 8000
 
-# Comando de inicio
+# Comando de inicio usando el script
 # Railway inyecta PORT automáticamente como variable de entorno
-# Usar formato shell para expandir la variable PORT correctamente
-CMD ["sh", "-c", "uvicorn src.main:app --host 0.0.0.0 --port ${PORT:-8000} --workers 1"]
+ENTRYPOINT ["./start.sh"]
 
