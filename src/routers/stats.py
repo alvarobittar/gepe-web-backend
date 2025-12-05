@@ -22,6 +22,7 @@ class TopProductStats(BaseModel):
     total_quantity: int
     stock: int
     price: float
+    total_revenue: float
 
 
 class RecentOrderStats(BaseModel):
@@ -166,7 +167,8 @@ def get_dashboard_stats(db: Session = Depends(get_db)):
                 db.query(
                     OrderItem.product_name,
                     OrderItem.product_id,
-                    func.sum(OrderItem.quantity).label("total_quantity")
+                    func.sum(OrderItem.quantity).label("total_quantity"),
+                    func.sum(OrderItem.unit_price * OrderItem.quantity).label("total_revenue")
                 )
                 .join(Order, OrderItem.order_id == Order.id)
                 .filter(Order.status == "PAID")
@@ -192,12 +194,15 @@ def get_dashboard_stats(db: Session = Depends(get_db)):
                     stock = product.stock or 0
                     price = product.price or 0.0
                 
+                total_revenue = float(item.total_revenue) if item.total_revenue else 0.0
+                
                 top_products.append(TopProductStats(
                     name=item.product_name,
                     category=category_name,
                     total_quantity=item.total_quantity,
                     stock=stock,
-                    price=price
+                    price=price,
+                    total_revenue=total_revenue
                 ))
         except Exception as e:
             logger.warning(f"Error al obtener top productos: {e}")
