@@ -13,6 +13,7 @@ from ..schemas.product_schema import (
 from ..schemas.product_price_settings_schema import (
     ProductPriceSettingsOut, ProductPriceSettingsUpdate
 )
+from ..utils import slugify
 
 router = APIRouter(prefix="/products", tags=["products"])
 
@@ -281,8 +282,7 @@ def get_low_stock_products(
 def create_product(product_data: ProductCreate, db: Session = Depends(get_db)):
     """Crear un nuevo producto"""
     # Generar slug automáticamente desde el nombre (siempre, ignorando el que venga en product_data)
-    import re
-    slug = re.sub(r'[^a-z0-9]+', '-', product_data.name.lower()).strip('-')
+    slug = slugify(product_data.name)
     # Asegurar que el slug sea único
     base_slug = slug
     counter = 1
@@ -367,8 +367,7 @@ def update_product(
         product.category_id = product_data.category_id
     # Si cambia el nombre, regenerar el slug automáticamente
     if product_data.name is not None and product_data.name != product.name:
-        import re
-        new_slug = re.sub(r'[^a-z0-9]+', '-', product_data.name.lower()).strip('-')
+        new_slug = slugify(product_data.name)
         # Asegurar que el slug sea único (excepto para este producto)
         base_slug = new_slug
         counter = 1
