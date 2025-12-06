@@ -4,7 +4,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from .routers import products, clubs, stats, cart, user, promo_banner, payments, orders, categories, payment_details
+from .routers import products, clubs, stats, cart, user, promo_banner, payments, orders, categories, payment_details, settings
 from .config import get_settings, clear_settings_cache
 from .database import Base, engine
 
@@ -28,17 +28,19 @@ clear_settings_cache()
 # Importar todos los modelos para que SQLAlchemy los registre antes de create_all()
 # Esto asegura que todas las tablas se creen correctamente
 from .models.product import Product, Category, ProductSizeStock  # noqa: F401
+from .models.product_price_settings import ProductPriceSettings  # noqa: F401
 from .models.user import User  # noqa: F401
 from .models.cart import CartItem  # noqa: F401
 from .models.order import Order  # noqa: F401
 from .models.payment import Payment  # noqa: F401
 from .models.promo_banner import PromoBanner  # noqa: F401
 from .models.club import Club  # noqa: F401
+from .models.notification_email import NotificationEmail  # noqa: F401
 
-settings = get_settings()
-logger.info(f"🔧 CORS_ORIGIN configurado al iniciar: {settings.cors_origin}")
+app_settings = get_settings()
+logger.info(f"🔧 CORS_ORIGIN configurado al iniciar: {app_settings.cors_origin}")
 
-app = FastAPI(title="GEPE Web Backend", version="0.1.0")
+app = FastAPI(title="GEPE Web Backend", version="0.1.0", redirect_slashes=False)
 
 # Configurar CORS
 # Construir lista de orígenes permitidos dinámicamente
@@ -47,13 +49,29 @@ allowed_origins = [
     "http://localhost:3001",
 ]
 
+# Verificar si CORS_ORIGIN está realmente configurado (no es el default)
+cors_origin_env = os.getenv("CORS_ORIGIN", "")
+cors_origin_configured = cors_origin_env and cors_origin_env != "http://localhost:3000"
+
 # Agregar CORS_ORIGIN del .env si está configurado y no está duplicado
-if settings.cors_origin and settings.cors_origin not in allowed_origins:
-    allowed_origins.append(settings.cors_origin)
+if cors_origin_configured:
+    # Permitir múltiples orígenes separados por coma
+    cors_origins = [origin.strip() for origin in cors_origin_env.split(",")]
+    for origin in cors_origins:
+        if origin and origin not in allowed_origins:
+            allowed_origins.append(origin)
+
+# En producción, permitir todos los orígenes si no hay CORS_ORIGIN configurado explícitamente
+# Esto es necesario para Railway donde el frontend puede estar en diferentes dominios
+if app_settings.environment == "production" and not cors_origin_configured:
+    logger.warning("⚠️ CORS_ORIGIN no configurado en producción, permitiendo todos los orígenes")
+    allowed_origins = ["*"]
+
+logger.info(f"🌐 Orígenes CORS permitidos: {allowed_origins}")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=allowed_origins,
+    allow_origins=allowed_origins if "*" not in allowed_origins else ["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -93,6 +111,7 @@ def create_tables():
                     "shipping_address": "VARCHAR(500)",
                     "shipping_city": "VARCHAR(100)",
                     "tracking_code": "VARCHAR(100)",
+                    "production_status": "VARCHAR(50)",  # Micro-estado de producción
                     "created_at": "DATETIME",
                     "updated_at": "DATETIME",
                 }
@@ -219,6 +238,26 @@ def create_tables():
                                 logger.warning(f"⚠️ No se pudo agregar columna {col_name} a products: {e}")
         except Exception as e:
             logger.warning(f"⚠️ Error durante migración de products: {e}")
+
+        # Inicializar precios globales si la tabla existe pero está vacía
+        try:
+            from .models.product_price_settings import ProductPriceSettings
+            inspector = inspect(engine)
+            if "product_price_settings" in inspector.get_table_names():
+                with engine.connect() as conn:
+                    existing_settings = conn.execute(
+                        text("SELECT id FROM product_price_settings WHERE id = 1")
+                    ).fetchone()
+                    if not existing_settings:
+                        logger.info("Creando valores por defecto para precios globales...")
+                        conn.execute(text(
+                            "INSERT INTO product_price_settings (id, price_hincha, price_jugador, price_profesional) "
+                            "VALUES (1, 59900.0, 69900.0, 89900.0)"
+                        ))
+                        conn.commit()
+                        logger.info("✅ Valores por defecto para precios globales creados")
+        except Exception as e:
+            logger.warning(f"⚠️ Error durante inicialización de precios globales: {e}")
         
         # Verificar que se crearon correctamente
         inspector = inspect(engine)
@@ -237,8 +276,12 @@ def create_tables():
         logger.error(f"❌ ERROR al crear tablas: {str(e)}", exc_info=True)
         raise
 
-# Crear tablas al iniciar
-create_tables()
+# Crear tablas al iniciar (no bloquear el inicio si falla)
+try:
+    create_tables()
+except Exception as e:
+    logger.error(f"❌ Error al crear tablas al iniciar: {str(e)}", exc_info=True)
+    logger.warning("⚠️ El servidor continuará iniciando, pero algunas funcionalidades pueden no estar disponibles")
 
 # Include routers
 app.include_router(products.router, prefix="/api")
@@ -251,13 +294,30 @@ app.include_router(payments.router, prefix="/api/payments")
 app.include_router(orders.router, prefix="/api")
 app.include_router(categories.router, prefix="/api")
 app.include_router(payment_details.router, prefix="/api")
+app.include_router(settings.router, prefix="/api")
 
 
 @app.get("/", tags=["root"])  # Simple welcome endpoint
 async def root():
+    logger.info("📍 Request recibido en /")
     return {"message": "Bienvenido al backend de GEPE Web"}
 
 
 @app.get("/api/health", tags=["health"])  # Health check for frontend
 async def health():
-    return {"status": "ok"}
+    logger.info("💓 Health check recibido")
+    return {"status": "ok", "server": "alive"}
+
+
+@app.get("/api/ping", tags=["health"])  # Super simple test
+async def ping():
+    import time
+    logger.info(f"🏓 Ping recibido a las {time.time()}")
+    return {"pong": True, "time": time.time()}
+
+
+@app.get("/favicon.ico", tags=["static"])
+async def favicon():
+    """Handle favicon.ico requests - return 204 No Content"""
+    from fastapi.responses import Response
+    return Response(status_code=204)

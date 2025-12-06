@@ -207,3 +207,7 @@ async def delete_category(
             detail=f"Error al eliminar la categoría: {str(e)}"
         )
 
+
+
+
+

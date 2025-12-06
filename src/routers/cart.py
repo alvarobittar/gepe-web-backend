@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from ..database import get_db
 from ..models.cart import CartItem
 from ..models.product import Product
+from ..models.product_price_settings import ProductPriceSettings
 
 router = APIRouter(prefix="/cart", tags=["cart"])
 
@@ -25,6 +26,8 @@ class CartItemOut(BaseModel):
     quantity: int
     calidad: str | None = None
     talle: str | None = None
+    preview_image_url: str | None = None
+    unit_price: float = 0.0
 
     class Config:
         from_attributes = True
@@ -38,8 +41,27 @@ def list_cart_items(db: Session = Depends(get_db)):
         .join(Product, CartItem.product_id == Product.id)
         .all()
     )
+    
+    # Obtener configuración de precios global
+    price_settings = db.query(ProductPriceSettings).first()
+    default_prices = {
+        "HINCHA": 59900.0,
+        "JUGADOR": 69900.0,
+        "PROFESIONAL": 89900.0,
+    }
+    if price_settings:
+        default_prices = {
+            "HINCHA": price_settings.price_hincha,
+            "JUGADOR": price_settings.price_jugador,
+            "PROFESIONAL": price_settings.price_profesional,
+        }
+    
     result: List[CartItemOut] = []
     for item in items:
+        # Calcular precio según calidad
+        calidad = (item.calidad or "JUGADOR").upper()
+        unit_price = default_prices.get(calidad, default_prices["JUGADOR"])
+        
         result.append(
             CartItemOut(
                 id=item.id,
@@ -48,6 +70,8 @@ def list_cart_items(db: Session = Depends(get_db)):
                 quantity=item.quantity,
                 calidad=item.calidad,
                 talle=item.talle,
+                preview_image_url=item.product.preview_image_url if item.product else None,
+                unit_price=unit_price,
             )
         )
     return result
@@ -83,6 +107,22 @@ def add_cart_item(payload: CartItemCreate, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(item)
 
+    # Calcular precio según calidad
+    price_settings = db.query(ProductPriceSettings).first()
+    default_prices = {
+        "HINCHA": 59900.0,
+        "JUGADOR": 69900.0,
+        "PROFESIONAL": 89900.0,
+    }
+    if price_settings:
+        default_prices = {
+            "HINCHA": price_settings.price_hincha,
+            "JUGADOR": price_settings.price_jugador,
+            "PROFESIONAL": price_settings.price_profesional,
+        }
+    calidad = (item.calidad or "JUGADOR").upper()
+    unit_price = default_prices.get(calidad, default_prices["JUGADOR"])
+
     return CartItemOut(
         id=item.id,
         product_id=item.product_id,
@@ -90,6 +130,8 @@ def add_cart_item(payload: CartItemCreate, db: Session = Depends(get_db)):
         quantity=item.quantity,
         calidad=item.calidad,
         talle=item.talle,
+        preview_image_url=item.product.preview_image_url if item.product else None,
+        unit_price=unit_price,
     )
 
 

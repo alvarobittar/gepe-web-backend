@@ -21,6 +21,12 @@ env/
 *.sqlite
 *.sqlite3
 gepe.db
+*.db.backup
+*.db-*
+
+# Scripts manuales de migración (ahora usamos Alembic)
+add_*.py
+update_*.py
 
 # Scripts de test y desarrollo temporal
 test_db_connection.py
@@ -29,13 +35,13 @@ fix_database_url.py
 setup-venv.bat
 run-backend.bat
 
-# NOTA: run-dev.bat NO está excluido porque es necesario para Windows
-
 # Testing
 .pytest_cache/
 .coverage
 htmlcov/
 .tox/
+
+# NOTA: run-dev.bat NO está en .gitignore porque Railway lo necesita
 
 # Distribución
 dist/

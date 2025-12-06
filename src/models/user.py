@@ -1,4 +1,5 @@
-from sqlalchemy import Column, Integer, String
+from sqlalchemy import Column, Integer, String, DateTime
+from datetime import datetime
 
 from ..database import Base
 
@@ -10,6 +11,8 @@ class User(Base):
     email = Column(String(255), unique=True, index=True, nullable=False)
     full_name = Column(String(255), nullable=True)
     hashed_password = Column(String(255), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
 
     # En esta primera versión no implementamos autenticación real.
+
 

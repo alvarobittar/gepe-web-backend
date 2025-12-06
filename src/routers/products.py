@@ -1,14 +1,19 @@
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
 from sqlalchemy.orm import Session, joinedload
 
 from ..database import get_db
 from ..models.product import Product, Category, ProductSizeStock
+from ..models.product_price_settings import ProductPriceSettings
 from ..schemas.product_schema import (
     ProductOut, ProductSizeStockOut, ProductSizeStockUpdate,
     ProductCreate, ProductUpdate, CategoryOut
 )
+from ..schemas.product_price_settings_schema import (
+    ProductPriceSettingsOut, ProductPriceSettingsUpdate
+)
+from ..utils import slugify
 
 router = APIRouter(prefix="/products", tags=["products"])
 
@@ -64,22 +69,24 @@ def _ensure_sample_data(db: Session) -> None:
     db.commit()
 
 
-@router.get("/", response_model=List[ProductOut])
-def list_products(
-    q: Optional[str] = Query(default=None, description="Buscar por nombre de prenda o club"),
-    gender: Optional[str] = Query(default=None, description="Filtrar por género (hombre/mujer)"),
-    category: Optional[str] = Query(default=None, description="Slug de categoría"),
-    offset: int = Query(0, ge=0, description="Desplazamiento para paginación (número de items a saltar)"),
-    limit: int = Query(20, ge=1, le=100, description="Cantidad máxima de productos a devolver"),
-    db: Session = Depends(get_db),
+def _list_products_impl(
+    q: Optional[str] = None,
+    gender: Optional[str] = None,
+    category: Optional[str] = None,
+    offset: int = 0,
+    limit: int = 20,
+    db: Session = None,
+    include_inactive: bool = False,
 ):
     """
-    Listado de productos con filtros opcionales por texto, género y categoría.
-    La búsqueda por texto matchea contra nombre de producto y club_name.
+    Implementación compartida para listar productos.
     """
     _ensure_sample_data(db)
 
-    query = db.query(Product).filter(Product.is_active.is_(True))
+    query = db.query(Product)
+    # Solo filtrar por is_active si no se incluyen inactivos (para admin)
+    if not include_inactive:
+        query = query.filter(Product.is_active.is_(True))
 
     if q:
         like = f"%{q.lower()}%"
@@ -101,8 +108,98 @@ def list_products(
     return products
 
 
-@router.get("/{product_id}", response_model=ProductOut)
+@router.get("", response_model=List[ProductOut])
+def list_products_no_slash(
+    q: Optional[str] = Query(default=None, description="Buscar por nombre de prenda o club"),
+    gender: Optional[str] = Query(default=None, description="Filtrar por género (hombre/mujer)"),
+    category: Optional[str] = Query(default=None, description="Slug de categoría"),
+    offset: int = Query(0, ge=0, description="Desplazamiento para paginación (número de items a saltar)"),
+    limit: int = Query(20, ge=1, le=100, description="Cantidad máxima de productos a devolver"),
+    include_inactive: bool = Query(default=False, description="Incluir productos inactivos (para admin)"),
+    db: Session = Depends(get_db),
+):
+    """
+    Listado de productos con filtros opcionales por texto, género y categoría.
+    La búsqueda por texto matchea contra nombre de producto y club_name.
+    Por defecto solo muestra productos activos. Use include_inactive=true para ver todos.
+    """
+    return _list_products_impl(q, gender, category, offset, limit, db, include_inactive)
+
+
+@router.get("/", response_model=List[ProductOut])
+def list_products(
+    q: Optional[str] = Query(default=None, description="Buscar por nombre de prenda o club"),
+    gender: Optional[str] = Query(default=None, description="Filtrar por género (hombre/mujer)"),
+    category: Optional[str] = Query(default=None, description="Slug de categoría"),
+    offset: int = Query(0, ge=0, description="Desplazamiento para paginación (número de items a saltar)"),
+    limit: int = Query(20, ge=1, le=100, description="Cantidad máxima de productos a devolver"),
+    include_inactive: bool = Query(default=False, description="Incluir productos inactivos (para admin)"),
+    db: Session = Depends(get_db),
+):
+    """
+    Listado de productos con filtros opcionales por texto, género y categoría.
+    La búsqueda por texto matchea contra nombre de producto y club_name.
+    Por defecto solo muestra productos activos. Use include_inactive=true para ver todos.
+    """
+    return _list_products_impl(q, gender, category, offset, limit, db, include_inactive)
+
+
+@router.get("/price-settings", response_model=ProductPriceSettingsOut)
+def get_price_settings(db: Session = Depends(get_db)):
+    """Obtener los precios globales de camisetas"""
+    settings = db.query(ProductPriceSettings).filter(ProductPriceSettings.id == 1).first()
+    
+    if not settings:
+        # Crear valores por defecto si no existen
+        settings = ProductPriceSettings(
+            id=1,
+            price_hincha=59900.0,
+            price_jugador=69900.0,
+            price_profesional=89900.0
+        )
+        db.add(settings)
+        db.commit()
+        db.refresh(settings)
+    
+    return settings
+
+
+@router.put("/price-settings", response_model=ProductPriceSettingsOut)
+def update_price_settings(
+    settings_data: ProductPriceSettingsUpdate,
+    db: Session = Depends(get_db)
+):
+    """Actualizar los precios globales de camisetas"""
+    settings = db.query(ProductPriceSettings).filter(ProductPriceSettings.id == 1).first()
+    
+    if not settings:
+        settings = ProductPriceSettings(id=1)
+        db.add(settings)
+    
+    settings.price_hincha = settings_data.price_hincha
+    settings.price_jugador = settings_data.price_jugador
+    settings.price_profesional = settings_data.price_profesional
+    
+    db.commit()
+    db.refresh(settings)
+    
+    return settings
+
+
+@router.get("/by-slug/{slug}", response_model=ProductOut)
+def get_product_by_slug(slug: str, db: Session = Depends(get_db)):
+    """Obtener un producto por su slug"""
+    product = db.query(Product).options(joinedload(Product.size_stocks)).filter(
+        Product.slug == slug, Product.is_active.is_(True)
+    ).first()
+    if not product:
+        raise HTTPException(status_code=404, detail="Producto no encontrado")
+    return product
+
+
+@router.get("/{product_id:int}", response_model=ProductOut)
 def get_product(product_id: int, db: Session = Depends(get_db)):
+    """Obtener un producto por su ID"""
     product = db.query(Product).options(joinedload(Product.size_stocks)).filter(
         Product.id == product_id, Product.is_active.is_(True)
     ).first()
@@ -184,21 +281,14 @@ def get_low_stock_products(
 @router.post("/", response_model=ProductOut)
 def create_product(product_data: ProductCreate, db: Session = Depends(get_db)):
     """Crear un nuevo producto"""
-    # Generar slug si no se proporciona
-    if not product_data.slug:
-        import re
-        slug = re.sub(r'[^a-z0-9]+', '-', product_data.name.lower()).strip('-')
-        # Asegurar que el slug sea único
-        base_slug = slug
-        counter = 1
-        while db.query(Product).filter(Product.slug == slug).first():
-            slug = f"{base_slug}-{counter}"
-            counter += 1
-    else:
-        # Verificar que el slug sea único
-        if db.query(Product).filter(Product.slug == product_data.slug).first():
-            raise HTTPException(status_code=400, detail="El slug ya existe")
-        slug = product_data.slug
+    # Generar slug automáticamente desde el nombre (siempre, ignorando el que venga en product_data)
+    slug = slugify(product_data.name)
+    # Asegurar que el slug sea único
+    base_slug = slug
+    counter = 1
+    while db.query(Product).filter(Product.slug == slug).first():
+        slug = f"{base_slug}-{counter}"
+        counter += 1
     
     # Verificar categoría si se proporciona
     category = None
@@ -275,15 +365,16 @@ def update_product(
             if not category:
                 raise HTTPException(status_code=404, detail="Categoría no encontrada")
         product.category_id = product_data.category_id
-    if product_data.slug is not None:
-        # Verificar que el slug sea único (excepto para este producto)
-        existing = db.query(Product).filter(
-            Product.slug == product_data.slug,
-            Product.id != product_id
-        ).first()
-        if existing:
-            raise HTTPException(status_code=400, detail="El slug ya existe")
-        product.slug = product_data.slug
+    # Si cambia el nombre, regenerar el slug automáticamente
+    if product_data.name is not None and product_data.name != product.name:
+        new_slug = slugify(product_data.name)
+        # Asegurar que el slug sea único (excepto para este producto)
+        base_slug = new_slug
+        counter = 1
+        while db.query(Product).filter(Product.slug == new_slug, Product.id != product_id).first():
+            new_slug = f"{base_slug}-{counter}"
+            counter += 1
+        product.slug = new_slug
     if product_data.is_active is not None:
         product.is_active = product_data.is_active
     if product_data.price_hincha is not None:
@@ -318,13 +409,33 @@ def update_product(
 
 @router.delete("/{product_id}")
 def delete_product(product_id: int, db: Session = Depends(get_db)):
-    """Eliminar/desactivar un producto (soft delete)"""
+    """
+    Eliminar físicamente un producto.
+    Solo se puede eliminar si el producto está inactivo.
+    """
+    from ..models.cart import CartItem
+    
     product = db.query(Product).filter(Product.id == product_id).first()
     if not product:
         raise HTTPException(status_code=404, detail="Producto no encontrado")
     
-    # Soft delete: marcar como inactivo
-    product.is_active = False
+    # Solo se puede eliminar si está inactivo
+    if product.is_active:
+        raise HTTPException(
+            status_code=400, 
+            detail="No se puede eliminar un producto activo. Primero debes desactivarlo."
+        )
+    
+    # Eliminar primero los items del carrito asociados (tiene ForeignKey constraint)
+    cart_items = db.query(CartItem).filter(CartItem.product_id == product_id).all()
+    for cart_item in cart_items:
+        db.delete(cart_item)
+    
+    # ProductSizeStock se eliminará automáticamente por cascade
+    # OrderItem no tiene ForeignKey constraint, así que no causa problemas
+    
+    # Hard delete: eliminar físicamente el producto
+    db.delete(product)
     db.commit()
     
     return {"message": "Producto eliminado correctamente"}
@@ -335,3 +446,22 @@ def list_categories(db: Session = Depends(get_db)):
     """Obtener lista de todas las categorías"""
     categories = db.query(Category).order_by(Category.name).all()
     return categories
+
+
+@router.post("/upload-image")
+async def upload_product_image(file: UploadFile = File(...)):
+    """
+    Subir una imagen de producto a Cloudinary.
+    
+    Devuelve la URL pública de la imagen subida.
+    """
+    from ..services.cloudinary_service import upload_product_image as upload_fn
+    
+    if not file.content_type or not file.content_type.startswith("image/"):
+        raise HTTPException(status_code=400, detail="El archivo debe ser una imagen")
+    
+    try:
+        result = await upload_fn(file)
+        return {"url": result["url"]}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error al subir la imagen: {str(e)}")

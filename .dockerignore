@@ -1,0 +1,37 @@
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+*.egg
+*.egg-info
+dist
+build
+.venv
+venv
+env
+.env
+.env.local
+*.db
+*.db.backup
+gepe.db
+gepe.db.backup
+.git
+.gitignore
+README.md
+*.md
+.vscode
+.idea
+*.log
+.DS_Store
+node_modules
+alembic/versions/__pycache__
+# NO excluir run-dev.bat - Railway lo necesita como start command
+# run-dev.bat
+migrate_sqlite_to_postgres.py
+add_display_name_column.py
+add_is_active_column.py
+update_user_role.py
+MIGRATE_DATA.md
+

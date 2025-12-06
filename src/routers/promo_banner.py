@@ -45,11 +45,9 @@ def _ensure_default_banners(db: Session) -> None:
     db.commit()
 
 
-@router.get("/", response_model=List[PromoBannerOut])
-def list_active_promo_banners(db: Session = Depends(get_db)):
+def _list_active_promo_banners_impl(db: Session):
     """
-    Endpoint público para obtener los mensajes activos del TopPromoBar,
-    ordenados por display_order e id.
+    Implementación compartida para listar banners activos.
     """
     _ensure_default_banners(db)
     banners = (
@@ -59,6 +57,24 @@ def list_active_promo_banners(db: Session = Depends(get_db)):
         .all()
     )
     return banners
+
+
+@router.get("", response_model=List[PromoBannerOut])
+def list_active_promo_banners_no_slash(db: Session = Depends(get_db)):
+    """
+    Endpoint público para obtener los mensajes activos del TopPromoBar,
+    ordenados por display_order e id.
+    """
+    return _list_active_promo_banners_impl(db)
+
+
+@router.get("/", response_model=List[PromoBannerOut])
+def list_active_promo_banners(db: Session = Depends(get_db)):
+    """
+    Endpoint público para obtener los mensajes activos del TopPromoBar,
+    ordenados por display_order e id.
+    """
+    return _list_active_promo_banners_impl(db)
 
 
 @router.get("/admin", response_model=List[PromoBannerOut])

@@ -7,14 +7,16 @@ import string
 from fastapi import APIRouter, HTTPException, Depends, status
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func
-from typing import List, Dict
+from typing import List, Dict, Optional
 from pydantic import BaseModel
 
 from ..config import get_settings
 from ..database import get_db
-from ..models.order import Order, OrderItem
+from ..models.order import Order, OrderItem, PRODUCTION_STATUS_WAITING_FABRIC, PRODUCTION_STATUS_CUTTING, PRODUCTION_STATUS_SEWING, PRODUCTION_STATUS_PRINTING, PRODUCTION_STATUS_FINISHED
 from ..models.user import User
-from ..schemas.order_schema import OrderCreate, OrderOut, OrderListOut, OrderUpdate
+from ..models.notification_email import NotificationEmail
+from ..schemas.order_schema import OrderCreate, OrderOut, OrderListOut, OrderUpdate, ProductionStatusUpdate
+from ..services.email_service import send_sale_notification_email
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["orders"])
@@ -138,6 +140,21 @@ async def create_order(
         
         logger.info(f"Orden creada exitosamente: ID={order.id}, Email={order.customer_email}, Total=${total_amount}")
         
+        # Enviar notificación por email a los administradores
+        try:
+            admin_emails = db.query(NotificationEmail).filter(
+                NotificationEmail.verified == True
+            ).all()
+            if admin_emails:
+                email_list = [e.email for e in admin_emails]
+                await send_sale_notification_email(order, email_list)
+                logger.info(f"Notificación de venta enviada a {len(email_list)} administradores")
+            else:
+                logger.info("No hay emails de administradores verificados para enviar notificación")
+        except Exception as e:
+            # No bloquear la creación de la orden si falla el envío del email
+            logger.warning(f"Error al enviar notificación de venta (no crítico): {str(e)}")
+        
         return order
         
     except Exception as e:
@@ -149,59 +166,91 @@ async def create_order(
         )
 
 
+def _list_orders_impl(
+    status_filter: str = None,
+    search: str = None,
+    skip: int = 0,
+    limit: int = 100,
+    db: Session = None
+):
+    """
+    Implementación compartida para listar órdenes.
+    """
+    query = db.query(Order).options(joinedload(Order.items))
+    
+    if status_filter:
+        query = query.filter(Order.status == status_filter)
+
+    if search:
+        search_term = f"%{search.lower()}%"
+        # Búsqueda flexible: ID, número de orden, email, nombre
+        criteria = [
+            Order.order_number.ilike(search_term),
+            Order.customer_email.ilike(search_term),
+            Order.customer_name.ilike(search_term),
+            Order.external_reference.ilike(search_term)
+        ]
+        # Si es numérico, intentar buscar por ID exacto
+        if search.isdigit():
+            criteria.append(Order.id == int(search))
+            
+        from sqlalchemy import or_
+        query = query.filter(or_(*criteria))
+    
+    orders = query.order_by(Order.created_at.desc()).offset(skip).limit(limit).all()
+    
+    # Agregar count de items y nombre del primer producto a cada orden
+    result = []
+    for order in orders:
+        # Obtener el nombre del primer producto para vista previa
+        first_product_name = None
+        if order.items and len(order.items) > 0:
+            first_product_name = order.items[0].product_name
+            # Si hay más de un producto, agregar indicador
+            if len(order.items) > 1:
+                first_product_name += f" y {len(order.items) - 1} más"
+        
+        order_dict = {
+            "id": order.id,
+            "order_number": order.order_number,
+            "customer_email": order.customer_email,
+            "customer_name": order.customer_name,
+            "status": order.status,
+            "total_amount": order.total_amount,
+            "created_at": order.created_at,
+            "items_count": len(order.items),
+            "first_product_name": first_product_name,
+            "payment_id": order.payment_id,
+            "external_reference": order.external_reference,
+            "shipping_method": order.shipping_method,
+            "shipping_address": order.shipping_address,
+            "shipping_city": order.shipping_city,
+            "tracking_code": order.tracking_code,
+            "production_status": order.production_status
+        }
+        result.append(OrderListOut(**order_dict))
+    
+    return result
+
+
 @router.get("/orders", response_model=List[OrderListOut])
+@router.get("/orders/", response_model=List[OrderListOut])
 async def list_orders(
     status_filter: str = None,
+    search: str = None,
     skip: int = 0,
     limit: int = 100,
     db: Session = Depends(get_db)
 ):
     """
-    Lista todas las órdenes. Opcionalmente filtra por status.
+    Lista todas las órdenes. Opcionalmente filtra por status o texto de búsqueda.
     
     - Para admin: ver todas las órdenes
     - Puede filtrar por status: PENDING, PAID, CANCELLED, REFUNDED
+    - Puede buscar por: ID, número de orden, email, nombre
     """
     try:
-        query = db.query(Order).options(joinedload(Order.items))
-        
-        if status_filter:
-            query = query.filter(Order.status == status_filter)
-        
-        orders = query.order_by(Order.created_at.desc()).offset(skip).limit(limit).all()
-        
-        # Agregar count de items y nombre del primer producto a cada orden
-        result = []
-        for order in orders:
-            # Obtener el nombre del primer producto para vista previa
-            first_product_name = None
-            if order.items and len(order.items) > 0:
-                first_product_name = order.items[0].product_name
-                # Si hay más de un producto, agregar indicador
-                if len(order.items) > 1:
-                    first_product_name += f" y {len(order.items) - 1} más"
-            
-            order_dict = {
-                "id": order.id,
-                "order_number": order.order_number,  # Incluir order_number
-                "customer_email": order.customer_email,
-                "customer_name": order.customer_name,
-                "status": order.status,
-                "total_amount": order.total_amount,
-                "created_at": order.created_at,
-                "items_count": len(order.items),
-                "first_product_name": first_product_name,
-                "payment_id": order.payment_id,
-                "external_reference": order.external_reference,
-                "shipping_method": order.shipping_method,
-                "shipping_address": order.shipping_address,
-                "shipping_city": order.shipping_city,
-                "tracking_code": order.tracking_code
-            }
-            result.append(OrderListOut(**order_dict))
-        
-        return result
-        
+        return _list_orders_impl(status_filter, search, skip, limit, db)
     except Exception as e:
         logger.error(f"Error al listar órdenes: {str(e)}", exc_info=True)
         raise HTTPException(
@@ -258,7 +307,8 @@ async def list_user_orders(
                 "shipping_method": order.shipping_method,
                 "shipping_address": order.shipping_address,
                 "shipping_city": order.shipping_city,
-                "tracking_code": order.tracking_code
+                "tracking_code": order.tracking_code,
+                "production_status": order.production_status
             }
             result.append(OrderListOut(**order_dict))
         
@@ -308,6 +358,143 @@ async def get_order_by_number(
         logger.info(f"Acceso a orden {order_number} sin email (modo admin)")
     
     return order
+
+
+# =====================================================
+# MODELOS Y FUNCIONES PARA PRODUCCIÓN (TALLER)
+# =====================================================
+
+# Lista de estados de producción válidos
+VALID_PRODUCTION_STATUSES = [
+    PRODUCTION_STATUS_WAITING_FABRIC,
+    PRODUCTION_STATUS_CUTTING,
+    PRODUCTION_STATUS_SEWING,
+    PRODUCTION_STATUS_PRINTING,
+    PRODUCTION_STATUS_FINISHED
+]
+
+
+class ProductionOrderItem(BaseModel):
+    """Item de orden para producción (sin precio)"""
+    id: int
+    product_name: str
+    product_size: Optional[str]
+    quantity: int
+
+
+class ProductionOrder(BaseModel):
+    """Orden para producción (sin precio)"""
+    id: int
+    order_number: Optional[str]
+    customer_name: Optional[str]
+    production_status: Optional[str]
+    created_at: str
+    items: List[ProductionOrderItem]
+    items_count: int
+
+
+class ProductionOrdersResponse(BaseModel):
+    """Respuesta con órdenes agrupadas por estado de producción"""
+    waiting_fabric: List[ProductionOrder]
+    cutting: List[ProductionOrder]
+    sewing: List[ProductionOrder]
+    printing: List[ProductionOrder]
+    finished: List[ProductionOrder]
+    total_count: int
+
+
+def _order_to_production_order(order: Order) -> ProductionOrder:
+    """Convierte una orden a ProductionOrder (sin precios)"""
+    items = [
+        ProductionOrderItem(
+            id=item.id,
+            product_name=item.product_name,
+            product_size=item.product_size,
+            quantity=item.quantity
+        )
+        for item in order.items
+    ]
+    
+    return ProductionOrder(
+        id=order.id,
+        order_number=order.order_number,
+        customer_name=order.customer_name,
+        production_status=order.production_status,
+        created_at=order.created_at.isoformat() if order.created_at else "",
+        items=items,
+        items_count=len(items)
+    )
+
+
+# =====================================================
+# GET /orders/production - Debe estar ANTES de /orders/{order_id}
+# para evitar que FastAPI interprete "production" como order_id
+# =====================================================
+
+@router.get("/orders/production", response_model=ProductionOrdersResponse)
+async def list_production_orders(
+    db: Session = Depends(get_db)
+):
+    """
+    Lista todos los pedidos PAGADOS para producción, agrupados por estado de producción.
+    
+    IMPORTANTE: Solo muestra pedidos con status='PAID'.
+    Los precios NO se incluyen en la respuesta (el taller no necesita verlos).
+    
+    Los pedidos se agrupan en las siguientes columnas:
+    - waiting_fabric: En espera de tela
+    - cutting: Corte
+    - sewing: Confección
+    - printing: Estampado
+    - finished: Terminado
+    """
+    try:
+        # Solo obtener pedidos PAGADOS
+        orders = (
+            db.query(Order)
+            .options(joinedload(Order.items))
+            .filter(Order.status == "PAID")
+            .order_by(Order.created_at.asc())  # Los más antiguos primero
+            .all()
+        )
+        
+        # Agrupar por estado de producción
+        waiting_fabric = []
+        cutting = []
+        sewing = []
+        printing = []
+        finished = []
+        
+        for order in orders:
+            prod_order = _order_to_production_order(order)
+            
+            if order.production_status == PRODUCTION_STATUS_CUTTING:
+                cutting.append(prod_order)
+            elif order.production_status == PRODUCTION_STATUS_SEWING:
+                sewing.append(prod_order)
+            elif order.production_status == PRODUCTION_STATUS_PRINTING:
+                printing.append(prod_order)
+            elif order.production_status == PRODUCTION_STATUS_FINISHED:
+                finished.append(prod_order)
+            else:
+                # Por defecto, incluyendo WAITING_FABRIC o None
+                waiting_fabric.append(prod_order)
+        
+        return ProductionOrdersResponse(
+            waiting_fabric=waiting_fabric,
+            cutting=cutting,
+            sewing=sewing,
+            printing=printing,
+            finished=finished,
+            total_count=len(orders)
+        )
+        
+    except Exception as e:
+        logger.error(f"Error al obtener pedidos de producción: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error al obtener pedidos de producción: {str(e)}"
+        )
 
 
 @router.get("/orders/{order_id}", response_model=OrderOut)
@@ -387,6 +574,10 @@ async def update_order(
     if order_update.tracking_code is not None:
         order.tracking_code = order_update.tracking_code
         logger.info(f"Orden {order_id}: código de seguimiento actualizado: {order_update.tracking_code}")
+    
+    if order_update.production_status is not None:
+        order.production_status = order_update.production_status
+        logger.info(f"Orden {order_id}: estado de producción actualizado: {order_update.production_status}")
     
     try:
         db.commit()
@@ -602,5 +793,154 @@ async def get_payment_stats(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error al obtener estadísticas de pagos: {str(e)}"
+        )
+
+
+
+
+# =====================================================
+# ENDPOINTS DE PRODUCCIÓN (TALLER) - PATCH y POST
+# =====================================================
+
+
+
+
+@router.patch("/orders/{order_id}/production-status", response_model=OrderOut)
+async def update_production_status(
+    order_id: int,
+    status_update: ProductionStatusUpdate,
+    db: Session = Depends(get_db)
+):
+    """
+    Actualiza el estado de producción de una orden.
+    
+    Estados válidos:
+    - WAITING_FABRIC: En espera de tela
+    - CUTTING: Corte
+    - SEWING: Confección
+    - PRINTING: Estampado
+    - FINISHED: Terminado
+    
+    Nota: Solo se puede actualizar órdenes con status='PAID'.
+    """
+    order = db.query(Order).filter(Order.id == order_id).first()
+    
+    if not order:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Orden {order_id} no encontrada"
+        )
+    
+    # Verificar que la orden esté pagada
+    if order.status != "PAID":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Solo se puede actualizar el estado de producción de órdenes pagadas. Estado actual: {order.status}"
+        )
+    
+    # Validar el estado de producción
+    if status_update.production_status not in VALID_PRODUCTION_STATUSES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Estado de producción inválido. Estados válidos: {', '.join(VALID_PRODUCTION_STATUSES)}"
+        )
+    
+    try:
+        old_status = order.production_status
+        order.production_status = status_update.production_status
+        db.commit()
+        db.refresh(order)
+        
+        logger.info(f"Orden {order_id} ({order.order_number}): estado de producción actualizado de {old_status} a {status_update.production_status}")
+        
+        return order
+        
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error al actualizar estado de producción: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error al actualizar estado de producción: {str(e)}"
+        )
+
+
+class FinishProductionResponse(BaseModel):
+    """Respuesta al terminar producción"""
+    success: bool
+    message: str
+    order_number: Optional[str]
+    email_sent: bool
+
+
+@router.post("/orders/{order_id}/finish-production", response_model=FinishProductionResponse)
+async def finish_production(
+    order_id: int,
+    db: Session = Depends(get_db)
+):
+    """
+    Marca una orden como terminada en producción y lista para enviar.
+    
+    Acciones que realiza:
+    1. Cambia production_status a 'FINISHED'
+    2. Cambia status de la orden a 'READY_FOR_SHIPMENT'
+    3. Envía email al cliente notificando que su pedido está listo
+    
+    Nota: Solo se puede terminar órdenes con status='PAID' y production_status='FINISHED'.
+    """
+    order = (
+        db.query(Order)
+        .options(joinedload(Order.items))
+        .filter(Order.id == order_id)
+        .first()
+    )
+    
+    if not order:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Orden {order_id} no encontrada"
+        )
+    
+    # Verificar que la orden esté pagada
+    if order.status != "PAID":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Solo se puede terminar producción de órdenes pagadas. Estado actual: {order.status}"
+        )
+    
+    try:
+        # Marcar como terminado
+        order.production_status = PRODUCTION_STATUS_FINISHED
+        order.status = "READY_FOR_SHIPMENT"
+        db.commit()
+        
+        logger.info(f"Orden {order_id} ({order.order_number}): producción terminada, lista para enviar")
+        
+        # Intentar enviar email al cliente
+        email_sent = False
+        try:
+            from ..services.email_service import send_production_complete_email
+            email_sent = await send_production_complete_email(order)
+            if email_sent:
+                logger.info(f"Email de producción completa enviado a {order.customer_email}")
+            else:
+                logger.warning(f"No se pudo enviar email a {order.customer_email}")
+        except ImportError:
+            logger.warning("Servicio de email no configurado, no se enviará notificación al cliente")
+        except Exception as email_error:
+            logger.error(f"Error al enviar email: {str(email_error)}")
+        
+        return FinishProductionResponse(
+            success=True,
+            message=f"Producción terminada. El pedido {order.order_number} está listo para enviar.",
+            order_number=order.order_number,
+            email_sent=email_sent
+        )
+        
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error al terminar producción: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error al terminar producción: {str(e)}"
         )
 

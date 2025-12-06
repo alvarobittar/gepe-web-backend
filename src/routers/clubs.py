@@ -1,33 +1,56 @@
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
 from sqlalchemy.orm import Session
 
 from ..database import get_db
 from ..models.club import Club
 from ..schemas.club_schema import ClubCreate, ClubUpdate, ClubOut
+from ..utils import slugify
 
 router = APIRouter(prefix="/clubs", tags=["clubs"])
 
 
-def _slugify(name: str) -> str:
+def _list_clubs_impl(
+    city_key: Optional[str] = None,
+    slug: Optional[str] = None,
+    only_active: bool = False,
+    db: Session = None,
+):
     """
-    Genera un slug sencillo a partir del nombre del club.
+    Implementación compartida para listar clubes.
     """
-    import re
+    query = db.query(Club)
+    if city_key:
+        query = query.filter(Club.city_key == city_key)
+    if slug:
+        query = query.filter(Club.slug == slug)
+    if only_active:
+        query = query.filter(Club.is_active == True)
+    clubs = query.order_by(Club.name.asc()).all()
+    return clubs
 
-    slug = name.lower()
-    # Eliminar tildes
-    slug = (
-        slug.replace("á", "a")
-        .replace("é", "e")
-        .replace("í", "i")
-        .replace("ó", "o")
-        .replace("ú", "u")
-        .replace("ñ", "n")
-    )
-    slug = re.sub(r"[^a-z0-9]+", "-", slug).strip("-")
-    return slug
+
+@router.get("", response_model=List[ClubOut])
+def list_clubs_no_slash(
+    city_key: Optional[str] = Query(
+        default=None,
+        description="Filtrar por ciudad (sanRafael, generalAlvear, malargue, sanLuis, mendoza, neuquen)",
+    ),
+    slug: Optional[str] = Query(
+        default=None,
+        description="Filtrar por slug exacto del club",
+    ),
+    only_active: bool = Query(
+        default=False,
+        description="Si es True, devuelve solo los clubes activos",
+    ),
+    db: Session = Depends(get_db),
+):
+    """
+    Listado de clubes, opcionalmente filtrados por ciudad y/o slug.
+    """
+    return _list_clubs_impl(city_key, slug, only_active, db)
 
 
 @router.get("/", response_model=List[ClubOut])
@@ -40,18 +63,16 @@ def list_clubs(
         default=None,
         description="Filtrar por slug exacto del club",
     ),
+    only_active: bool = Query(
+        default=False,
+        description="Si es True, devuelve solo los clubes activos",
+    ),
     db: Session = Depends(get_db),
 ):
     """
     Listado de clubes, opcionalmente filtrados por ciudad y/o slug.
     """
-    query = db.query(Club)
-    if city_key:
-        query = query.filter(Club.city_key == city_key)
-    if slug:
-        query = query.filter(Club.slug == slug)
-    clubs = query.order_by(Club.name.asc()).all()
-    return clubs
+    return _list_clubs_impl(city_key, slug, only_active, db)
 
 
 @router.post("/", response_model=ClubOut, status_code=201)
@@ -74,7 +95,7 @@ def create_club(payload: ClubCreate, db: Session = Depends(get_db)):
     if existing_by_name:
         raise HTTPException(status_code=400, detail="Ya existe un club con ese nombre")
 
-    base_slug = _slugify(payload.name)
+    base_slug = slugify(payload.name)
     if not base_slug:
         raise HTTPException(status_code=400, detail="No se pudo generar un slug para el club")
 
@@ -89,6 +110,8 @@ def create_club(payload: ClubCreate, db: Session = Depends(get_db)):
         slug=slug,
         city_key=payload.city_key,
         crest_image_url=payload.crest_image_url,
+        display_name=payload.display_name.strip() if payload.display_name else None,
+        is_active=payload.is_active,
     )
 
     db.add(club)
@@ -137,7 +160,7 @@ def update_club(club_id: int, payload: ClubUpdate, db: Session = Depends(get_db)
         club.name = new_name
 
         # Recalcular slug a partir del nuevo nombre
-        base_slug = _slugify(new_name)
+        base_slug = slugify(new_name)
         if not base_slug:
             raise HTTPException(status_code=400, detail="No se pudo generar un slug para el club")
 
@@ -155,6 +178,15 @@ def update_club(club_id: int, payload: ClubUpdate, db: Session = Depends(get_db)
     # Actualizar escudo si se envía (puede ser None explícito para limpiar)
     if "crest_image_url" in data:
         club.crest_image_url = data["crest_image_url"]
+
+    # Actualizar display_name si se envía
+    if "display_name" in data:
+        val = data["display_name"]
+        club.display_name = val.strip() if val else None
+
+    # Actualizar is_active si se envía
+    if "is_active" in data:
+        club.is_active = data["is_active"]
 
     db.add(club)
     db.commit()
@@ -176,4 +208,23 @@ def delete_club(club_id: int, db: Session = Depends(get_db)):
     db.delete(club)
     db.commit()
     return None
+
+
+@router.post("/upload-crest")
+async def upload_club_crest(file: UploadFile = File(...)):
+    """
+    Subir un escudo de club a Cloudinary.
+    
+    Devuelve la URL pública del escudo subido.
+    """
+    from ..services.cloudinary_service import upload_club_crest as upload_fn
+    
+    if not file.content_type or not file.content_type.startswith("image/"):
+        raise HTTPException(status_code=400, detail="El archivo debe ser una imagen")
+    
+    try:
+        result = await upload_fn(file)
+        return {"url": result["url"]}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error al subir el escudo: {str(e)}")
 

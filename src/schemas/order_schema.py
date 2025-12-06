@@ -38,10 +38,16 @@ class OrderCreate(BaseModel):
 
 class OrderUpdate(BaseModel):
     status: Optional[str] = None  # PENDING, PAID, IN_PRODUCTION, SHIPPED, DELIVERED, CANCELLED, REFUNDED
+    production_status: Optional[str] = None  # WAITING_FABRIC, CUTTING, SEWING, PRINTING, FINISHED
     payment_id: Optional[str] = None
     shipping_address: Optional[str] = None
     shipping_city: Optional[str] = None
     tracking_code: Optional[str] = None
+
+
+class ProductionStatusUpdate(BaseModel):
+    """Schema para actualizar solo el estado de producción"""
+    production_status: str  # WAITING_FABRIC, CUTTING, SEWING, PRINTING, FINISHED
 
 
 class OrderOut(BaseModel):
@@ -60,6 +66,7 @@ class OrderOut(BaseModel):
     shipping_address: Optional[str]
     shipping_city: Optional[str]
     tracking_code: Optional[str]  # Código de seguimiento
+    production_status: Optional[str]  # Estado de producción
     created_at: datetime
     updated_at: datetime
     items: List[OrderItemOut]
@@ -84,6 +91,7 @@ class OrderListOut(BaseModel):
     shipping_address: Optional[str] = None  # Dirección de envío
     shipping_city: Optional[str] = None  # Ciudad de envío
     tracking_code: Optional[str] = None  # Código de seguimiento
+    production_status: Optional[str] = None  # Estado de producción
 
     class Config:
         from_attributes = True

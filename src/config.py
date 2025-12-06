@@ -9,7 +9,13 @@ class Settings:
     
     @property
     def environment(self) -> str:
-        return os.getenv("ENV", "development")
+        # Detectar producción por variables de Railway o ENV
+        env = os.getenv("ENV", "").lower()
+        railway_env = os.getenv("RAILWAY_ENVIRONMENT", "").lower()
+        # Si está en Railway (tiene PORT) o ENV=production, es producción
+        if env == "production" or railway_env == "production" or os.getenv("PORT"):
+            return "production"
+        return "development"
     
     @property
     def cors_origin(self) -> str:
