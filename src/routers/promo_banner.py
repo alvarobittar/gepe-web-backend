@@ -2,8 +2,9 @@ from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+from sqlalchemy import text
 
-from ..database import get_db
+from ..database import get_db, engine
 from ..models.promo_banner import PromoBanner
 from ..schemas.promo_banner_schema import (
     PromoBannerOut,
@@ -13,6 +14,34 @@ from ..schemas.promo_banner_schema import (
 
 
 router = APIRouter(prefix="/promo-banners", tags=["promo-banners"])
+
+
+def _reset_promo_banner_sequence(db: Session) -> None:
+    """
+    Resetea la secuencia de PostgreSQL para promo_banners.id
+    para que apunte al siguiente ID disponible.
+    Solo funciona con PostgreSQL, se ignora silenciosamente en SQLite.
+    """
+    try:
+        if engine.url.drivername == "postgresql":
+            result = db.execute(
+                text(
+                    "SELECT setval(pg_get_serial_sequence('promo_banners', 'id'), "
+                    "(SELECT COALESCE(MAX(id), 0) + 1 FROM promo_banners), false)"
+                )
+            )
+            db.commit()
+    except Exception:
+        try:
+            db.execute(
+                text(
+                    "SELECT setval('promo_banners_id_seq', "
+                    "(SELECT COALESCE(MAX(id), 0) + 1 FROM promo_banners), false)"
+                )
+            )
+            db.commit()
+        except Exception:
+            pass
 
 
 def _ensure_default_banners(db: Session) -> None:
@@ -43,6 +72,8 @@ def _ensure_default_banners(db: Session) -> None:
     ]
     db.add_all(defaults)
     db.commit()
+    
+    _reset_promo_banner_sequence(db)
 
 
 def _list_active_promo_banners_impl(db: Session):
@@ -97,6 +128,7 @@ def list_all_promo_banners_admin(db: Session = Depends(get_db)):
 
 @router.post("/admin", response_model=PromoBannerOut, status_code=201)
 def create_promo_banner(payload: PromoBannerCreate, db: Session = Depends(get_db)):
+    _reset_promo_banner_sequence(db)
     banner = PromoBanner(
         message=payload.message,
         is_active=payload.is_active,
