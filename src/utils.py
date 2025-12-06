@@ -35,3 +35,5 @@ def slugify(text: str) -> str:
     slug = slug.strip("-")
     
     return slug
+
+

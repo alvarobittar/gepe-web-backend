@@ -149,3 +149,5 @@ def get_email_config_status():
         status["error"] = "RESEND_API_KEY no está configurada en las variables de entorno. Agrega esta variable en tu archivo .env"
     
     return status
+
+

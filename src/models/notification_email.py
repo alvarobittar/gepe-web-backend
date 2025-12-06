@@ -12,3 +12,5 @@ class NotificationEmail(Base):
     verified = Column(Boolean, default=False, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     verified_at = Column(DateTime, nullable=True)
+
+
