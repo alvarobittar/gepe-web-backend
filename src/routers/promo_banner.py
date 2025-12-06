@@ -6,14 +6,31 @@ from sqlalchemy import text
 
 from ..database import get_db, engine
 from ..models.promo_banner import PromoBanner
+from ..models.promo_banner_settings import PromoBannerSettings
 from ..schemas.promo_banner_schema import (
     PromoBannerOut,
     PromoBannerCreate,
     PromoBannerUpdate,
+    PromoBannerSettingsOut,
+    PromoBannerSettingsUpdate,
 )
 
 
 router = APIRouter(prefix="/promo-banners", tags=["promo-banners"])
+
+
+def _ensure_default_settings(db: Session) -> PromoBannerSettings:
+    """
+    Asegura que exista una configuración por defecto.
+    Si no existe, la crea con valores por defecto.
+    """
+    settings = db.query(PromoBannerSettings).first()
+    if not settings:
+        settings = PromoBannerSettings(change_interval_seconds=4)
+        db.add(settings)
+        db.commit()
+        db.refresh(settings)
+    return settings
 
 
 def _reset_promo_banner_sequence(db: Session) -> None:
@@ -138,6 +155,48 @@ def create_promo_banner(payload: PromoBannerCreate, db: Session = Depends(get_db
     db.commit()
     db.refresh(banner)
     return banner
+
+
+@router.get("/settings", response_model=PromoBannerSettingsOut)
+def get_promo_banner_settings(db: Session = Depends(get_db)):
+    """
+    Endpoint público para obtener la configuración del intervalo de cambio de mensajes.
+    """
+    settings = _ensure_default_settings(db)
+    return settings
+
+
+@router.get("/admin/settings", response_model=PromoBannerSettingsOut)
+def get_promo_banner_settings_admin(db: Session = Depends(get_db)):
+    """
+    Endpoint de administración para obtener la configuración del intervalo.
+    """
+    settings = _ensure_default_settings(db)
+    return settings
+
+
+@router.put("/admin/settings", response_model=PromoBannerSettingsOut)
+def update_promo_banner_settings(
+    payload: PromoBannerSettingsUpdate, db: Session = Depends(get_db)
+):
+    """
+    Endpoint de administración para actualizar la configuración del intervalo.
+    """
+    if payload.change_interval_seconds < 1:
+        raise HTTPException(
+            status_code=400, detail="El intervalo debe ser al menos 1 segundo"
+        )
+    if payload.change_interval_seconds > 60:
+        raise HTTPException(
+            status_code=400, detail="El intervalo no puede ser mayor a 60 segundos"
+        )
+
+    settings = _ensure_default_settings(db)
+    settings.change_interval_seconds = payload.change_interval_seconds
+    db.add(settings)
+    db.commit()
+    db.refresh(settings)
+    return settings
 
 
 @router.put("/admin/{banner_id}", response_model=PromoBannerOut)
