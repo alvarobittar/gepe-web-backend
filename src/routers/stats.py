@@ -14,6 +14,21 @@ from ..models.user import User
 router = APIRouter(prefix="/stats", tags=["stats"])
 
 
+# --- Schemas para Sales Ranking ---
+
+class ProductSalesRanking(BaseModel):
+    id: int
+    name: str
+    club_name: Optional[str] = None
+    sales_count: int
+    preview_image_url: Optional[str] = None
+    slug: str
+
+
+class SalesRankingResponse(BaseModel):
+    ranking: List[ProductSalesRanking]
+
+
 # --- Schemas para Dashboard ---
 
 class TopProductStats(BaseModel):
@@ -61,6 +76,67 @@ async def get_ranking():
             {"product_id": 1, "score": 75},
         ]
     }
+
+
+@router.get("/sales-ranking", response_model=SalesRankingResponse)
+def get_sales_ranking(db: Session = Depends(get_db)):
+    """
+    Obtiene el ranking de ventas de todos los productos.
+    - Cuenta las unidades vendidas de pedidos PAID
+    - Ordena por cantidad vendida (descendente)
+    - Para productos con 0 ventas, ordena alfabéticamente por nombre del club
+    """
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    try:
+        # Subconsulta para obtener total vendido por producto
+        sales_subquery = (
+            db.query(
+                OrderItem.product_id,
+                func.coalesce(func.sum(OrderItem.quantity), 0).label("sold_qty")
+            )
+            .join(Order, OrderItem.order_id == Order.id)
+            .filter(Order.status == "PAID")
+            .group_by(OrderItem.product_id)
+            .subquery()
+        )
+        
+        # Consulta principal: todos los productos activos con sus ventas
+        products_with_sales = (
+            db.query(
+                Product.id,
+                Product.name,
+                Product.club_name,
+                Product.preview_image_url,
+                Product.slug,
+                func.coalesce(sales_subquery.c.sold_qty, 0).label("sales_count")
+            )
+            .outerjoin(sales_subquery, Product.id == sales_subquery.c.product_id)
+            .filter(Product.is_active == True)
+            .order_by(
+                desc(func.coalesce(sales_subquery.c.sold_qty, 0)),  # Mayor venta primero
+                func.coalesce(Product.club_name, Product.name).asc()  # Alfabético como desempate
+            )
+            .all()
+        )
+        
+        ranking = []
+        for p in products_with_sales:
+            ranking.append(ProductSalesRanking(
+                id=p.id,
+                name=p.name,
+                club_name=p.club_name,
+                sales_count=p.sales_count or 0,
+                preview_image_url=p.preview_image_url,
+                slug=p.slug
+            ))
+        
+        return SalesRankingResponse(ranking=ranking)
+        
+    except Exception as e:
+        logger.error(f"Error al obtener ranking de ventas: {e}", exc_info=True)
+        return SalesRankingResponse(ranking=[])
 
 
 def get_customer_initials(name: str) -> str:
