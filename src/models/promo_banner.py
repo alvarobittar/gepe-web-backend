@@ -6,7 +6,7 @@ from ..database import Base
 class PromoBanner(Base):
     __tablename__ = "promo_banners"
 
-    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    id = Column(Integer, primary_key=True, index=True)
     message = Column(String(255), nullable=False)
     is_active = Column(Boolean, default=True)
     display_order = Column(Integer, default=0)
