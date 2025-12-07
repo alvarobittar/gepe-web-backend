@@ -93,14 +93,15 @@ def get_sales_ranking(db: Session = Depends(get_db)):
     """
     Obtiene el ranking de ventas de todos los productos.
     - Cuenta las unidades vendidas de pedidos PAID
-    - Ordena por cantidad vendida (descendente)
+    - Suma el ajuste manual de ventas (ventas de tienda física)
+    - Ordena por cantidad vendida total (descendente)
     - Para productos con 0 ventas, ordena alfabéticamente por nombre del club
     """
     import logging
     logger = logging.getLogger(__name__)
     
     try:
-        # Subconsulta para obtener total vendido por producto
+        # Subconsulta para obtener total vendido por producto (ventas online)
         sales_subquery = (
             db.query(
                 OrderItem.product_id,
@@ -113,6 +114,7 @@ def get_sales_ranking(db: Session = Depends(get_db)):
         )
         
         # Consulta principal: todos los productos activos con sus ventas
+        # total_sales = ventas_online + ajuste_manual
         products_with_sales = (
             db.query(
                 Product.id,
@@ -120,27 +122,32 @@ def get_sales_ranking(db: Session = Depends(get_db)):
                 Product.club_name,
                 Product.preview_image_url,
                 Product.slug,
-                func.coalesce(sales_subquery.c.sold_qty, 0).label("sales_count")
+                Product.manual_sales_adjustment,
+                func.coalesce(sales_subquery.c.sold_qty, 0).label("online_sales")
             )
             .outerjoin(sales_subquery, Product.id == sales_subquery.c.product_id)
             .filter(Product.is_active == True)
-            .order_by(
-                desc(func.coalesce(sales_subquery.c.sold_qty, 0)),  # Mayor venta primero
-                func.coalesce(Product.club_name, Product.name).asc()  # Alfabético como desempate
-            )
             .all()
         )
         
+        # Calcular total y ordenar en Python para sumar el ajuste manual
         ranking = []
         for p in products_with_sales:
+            online_sales = p.online_sales or 0
+            manual_adjustment = p.manual_sales_adjustment or 0
+            total_sales = online_sales + manual_adjustment
+            
             ranking.append(ProductSalesRanking(
                 id=p.id,
                 name=p.name,
                 club_name=p.club_name,
-                sales_count=p.sales_count or 0,
+                sales_count=total_sales,
                 preview_image_url=p.preview_image_url,
                 slug=p.slug
             ))
+        
+        # Ordenar: mayor venta primero, luego alfabético como desempate
+        ranking.sort(key=lambda x: (-x.sales_count, x.club_name or x.name or ""))
         
         return SalesRankingResponse(ranking=ranking)
         
@@ -159,11 +166,9 @@ def get_trending_ranking(
     Obtiene el ranking de productos en **tendencia**.
 
     - Considera solo las unidades vendidas en pedidos PAID dentro de los últimos `days` días (por defecto 7).
-    - Ordena por cantidad vendida en esa ventana de tiempo (descendente).
+    - Suma el ajuste manual de ventas (ventas de tienda física)
+    - Ordena por cantidad vendida total en esa ventana de tiempo (descendente).
     - Devuelve como máximo `limit` productos (por defecto Top 10).
-
-    Esto permite que un producto que esté vendiendo mucho esta semana
-    aparezca arriba en el ranking, aunque históricamente tenga menos ventas totales.
     """
     import logging
 
@@ -174,7 +179,7 @@ def get_trending_ranking(
         now_utc = datetime.utcnow()
         from_date = now_utc - timedelta(days=days if days > 0 else 7)
 
-        # Subconsulta: ventas por producto en la ventana de tiempo
+        # Subconsulta: ventas por producto en la ventana de tiempo (ventas online)
         weekly_sales_subquery = (
             db.query(
                 OrderItem.product_id,
@@ -189,10 +194,7 @@ def get_trending_ranking(
             .subquery()
         )
 
-        # Consulta principal:
-        # - Trae TODOS los productos activos
-        # - Les asocia la cantidad vendida en la ventana (0 si no vendieron nada)
-        # De esta forma, aunque no existan compras aún, igual aparecen productos
+        # Consulta principal: productos activos con ventas de la semana
         products_with_weekly_sales = (
             db.query(
                 Product.id,
@@ -200,35 +202,40 @@ def get_trending_ranking(
                 Product.club_name,
                 Product.preview_image_url,
                 Product.slug,
-                func.coalesce(weekly_sales_subquery.c.sold_qty_week, 0).label(
-                    "sales_count"
-                ),
+                Product.manual_sales_adjustment,
+                func.coalesce(weekly_sales_subquery.c.sold_qty_week, 0).label("online_sales"),
             )
             .outerjoin(
                 weekly_sales_subquery,
                 Product.id == weekly_sales_subquery.c.product_id,
-            )  # OUTER JOIN: incluye productos sin ventas en la semana
-            .filter(Product.is_active == True)
-            .order_by(
-                desc(func.coalesce(weekly_sales_subquery.c.sold_qty_week, 0)),  # Más vendidos en la semana primero
-                func.coalesce(Product.club_name, Product.name).asc(),  # Desempate alfabético
             )
-            .limit(limit if limit > 0 else 10)
+            .filter(Product.is_active == True)
             .all()
         )
 
+        # Calcular total y ordenar en Python para sumar el ajuste manual
         ranking: List[ProductSalesRanking] = []
         for p in products_with_weekly_sales:
+            online_sales = p.online_sales or 0
+            manual_adjustment = p.manual_sales_adjustment or 0
+            total_sales = online_sales + manual_adjustment
+            
             ranking.append(
                 ProductSalesRanking(
                     id=p.id,
                     name=p.name,
                     club_name=p.club_name,
-                    sales_count=p.sales_count or 0,
+                    sales_count=total_sales,
                     preview_image_url=p.preview_image_url,
                     slug=p.slug,
                 )
             )
+
+        # Ordenar: mayor venta primero, luego alfabético como desempate
+        ranking.sort(key=lambda x: (-x.sales_count, x.club_name or x.name or ""))
+        
+        # Limitar resultados
+        ranking = ranking[:limit if limit > 0 else 10]
 
         return SalesRankingResponse(ranking=ranking)
 
@@ -334,29 +341,33 @@ def get_dashboard_stats(db: Session = Depends(get_db)):
             except Exception:
                 new_customers = 0
         
-        # --- Top productos vendidos (basado en OrderItems de pedidos PAID) ---
+        # --- Top productos vendidos (basado en OrderItems de pedidos PAID + ajuste manual) ---
         top_products = []
         try:
-            top_products_query = (
+            # Primero obtener ventas online por producto
+            online_sales_query = (
                 db.query(
                     OrderItem.product_name,
                     OrderItem.product_id,
-                    func.sum(OrderItem.quantity).label("total_quantity"),
+                    func.sum(OrderItem.quantity).label("online_quantity"),
                     func.sum(OrderItem.unit_price * OrderItem.quantity).label("total_revenue")
                 )
                 .join(Order, OrderItem.order_id == Order.id)
                 .filter(Order.status == "PAID")
                 .group_by(OrderItem.product_name, OrderItem.product_id)
-                .order_by(desc("total_quantity"))
-                .limit(4)
                 .all()
             )
             
-            for item in top_products_query:
-                # Buscar info del producto original si existe
+            # Crear diccionario con totales por producto_id
+            product_sales_dict = {}
+            
+            for item in online_sales_query:
                 product = None
+                manual_adjustment = 0
                 if item.product_id:
                     product = db.query(Product).filter(Product.id == item.product_id).first()
+                    if product:
+                        manual_adjustment = product.manual_sales_adjustment or 0
                 
                 category_name = None
                 stock = 0
@@ -368,15 +379,49 @@ def get_dashboard_stats(db: Session = Depends(get_db)):
                     stock = product.stock or 0
                     price = product.price or 0.0
                 
+                online_quantity = item.online_quantity or 0
+                total_quantity = online_quantity + manual_adjustment
                 total_revenue = float(item.total_revenue) if item.total_revenue else 0.0
                 
+                key = item.product_id or item.product_name
+                product_sales_dict[key] = {
+                    "name": item.product_name,
+                    "category": category_name,
+                    "total_quantity": total_quantity,
+                    "stock": stock,
+                    "price": price,
+                    "total_revenue": total_revenue
+                }
+            
+            # Agregar productos con solo ventas manuales (sin órdenes online)
+            manual_only_products = db.query(Product).filter(
+                Product.manual_sales_adjustment > 0,
+                Product.is_active == True
+            ).all()
+            
+            for product in manual_only_products:
+                if product.id not in product_sales_dict:
+                    category_name = product.category.name if product.category else None
+                    product_sales_dict[product.id] = {
+                        "name": product.name,
+                        "category": category_name,
+                        "total_quantity": product.manual_sales_adjustment or 0,
+                        "stock": product.stock or 0,
+                        "price": product.price or 0.0,
+                        "total_revenue": 0.0  # Sin revenue real si no hay órdenes
+                    }
+            
+            # Ordenar por cantidad total y tomar top 4
+            product_sales = list(product_sales_dict.values())
+            product_sales.sort(key=lambda x: -x["total_quantity"])
+            for ps in product_sales[:4]:
                 top_products.append(TopProductStats(
-                    name=item.product_name,
-                    category=category_name,
-                    total_quantity=item.total_quantity,
-                    stock=stock,
-                    price=price,
-                    total_revenue=total_revenue
+                    name=ps["name"],
+                    category=ps["category"],
+                    total_quantity=ps["total_quantity"],
+                    stock=ps["stock"],
+                    price=ps["price"],
+                    total_revenue=ps["total_revenue"]
                 ))
         except Exception as e:
             logger.warning(f"Error al obtener top productos: {e}")

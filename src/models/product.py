@@ -46,6 +46,10 @@ class Product(Base):
     image4_url = Column(String(500), nullable=True)
 
     is_active = Column(Boolean, default=True)
+    
+    # Ajuste manual de ventas (ventas de tienda física)
+    # Este valor se suma a las ventas online para el ranking
+    manual_sales_adjustment = Column(Integer, default=0)
 
     category_id = Column(Integer, ForeignKey("categories.id"), nullable=True)
     category = relationship("Category", back_populates="products")

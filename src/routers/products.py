@@ -395,6 +395,8 @@ def update_product(
         product.image3_url = product_data.image3_url
     if product_data.image4_url is not None:
         product.image4_url = product_data.image4_url
+    if product_data.manual_sales_adjustment is not None:
+        product.manual_sales_adjustment = product_data.manual_sales_adjustment
     
     db.commit()
     db.refresh(product)

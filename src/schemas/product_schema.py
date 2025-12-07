@@ -61,6 +61,7 @@ class ProductUpdate(BaseModel):
     image2_url: Optional[str] = None
     image3_url: Optional[str] = None
     image4_url: Optional[str] = None
+    manual_sales_adjustment: Optional[int] = None
 
 
 class ProductOut(BaseModel):
@@ -82,6 +83,7 @@ class ProductOut(BaseModel):
     category: Optional[CategoryOut] = None
     size_stocks: Optional[List[ProductSizeStockOut]] = None
     is_active: bool
+    manual_sales_adjustment: int = 0
 
     class Config:
         from_attributes = True

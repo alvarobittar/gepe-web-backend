@@ -226,6 +226,7 @@ def create_tables():
                     "price_hincha": "FLOAT",
                     "price_jugador": "FLOAT",
                     "price_profesional": "FLOAT",
+                    "manual_sales_adjustment": "INTEGER DEFAULT 0",
                 }
 
                 with engine.connect() as conn:
