@@ -33,3 +33,4 @@ Write-Host "Iniciando servidor en http://localhost:8000..." -ForegroundColor Gre
 Write-Host "Presiona Ctrl+C para detener el servidor" -ForegroundColor Cyan
 & $pythonExe -m uvicorn src.main:app --reload --port 8000
 
+

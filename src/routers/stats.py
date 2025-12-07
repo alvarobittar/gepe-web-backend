@@ -189,7 +189,10 @@ def get_trending_ranking(
             .subquery()
         )
 
-        # Consulta principal: solo productos activos que hayan vendido algo en la semana
+        # Consulta principal:
+        # - Trae TODOS los productos activos
+        # - Les asocia la cantidad vendida en la ventana (0 si no vendieron nada)
+        # De esta forma, aunque no existan compras aún, igual aparecen productos
         products_with_weekly_sales = (
             db.query(
                 Product.id,
@@ -201,14 +204,14 @@ def get_trending_ranking(
                     "sales_count"
                 ),
             )
-            .join(
+            .outerjoin(
                 weekly_sales_subquery,
                 Product.id == weekly_sales_subquery.c.product_id,
-            )  # INNER JOIN para traer solo los que tuvieron ventas en la ventana
+            )  # OUTER JOIN: incluye productos sin ventas en la semana
             .filter(Product.is_active == True)
             .order_by(
-                desc("sales_count"),  # Más vendidos en la semana primero
-                func.coalesce(Product.club_name, Product.name).asc(),
+                desc(func.coalesce(weekly_sales_subquery.c.sold_qty_week, 0)),  # Más vendidos en la semana primero
+                func.coalesce(Product.club_name, Product.name).asc(),  # Desempate alfabético
             )
             .limit(limit if limit > 0 else 10)
             .all()
