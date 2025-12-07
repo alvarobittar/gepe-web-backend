@@ -29,6 +29,16 @@ class SalesRankingResponse(BaseModel):
     ranking: List[ProductSalesRanking]
 
 
+class TrendingParams(BaseModel):
+    """
+    Parámetros opcionales para el ranking de tendencias.
+    - days: ventana de días hacia atrás a considerar (por defecto 7)
+    - limit: cantidad máxima de productos a devolver (por defecto 10)
+    """
+    days: int = 7
+    limit: int = 10
+
+
 # --- Schemas para Dashboard ---
 
 class TopProductStats(BaseModel):
@@ -136,6 +146,91 @@ def get_sales_ranking(db: Session = Depends(get_db)):
         
     except Exception as e:
         logger.error(f"Error al obtener ranking de ventas: {e}", exc_info=True)
+        return SalesRankingResponse(ranking=[])
+
+
+@router.get("/trending-ranking", response_model=SalesRankingResponse)
+def get_trending_ranking(
+    days: int = 7,
+    limit: int = 10,
+    db: Session = Depends(get_db),
+):
+    """
+    Obtiene el ranking de productos en **tendencia**.
+
+    - Considera solo las unidades vendidas en pedidos PAID dentro de los últimos `days` días (por defecto 7).
+    - Ordena por cantidad vendida en esa ventana de tiempo (descendente).
+    - Devuelve como máximo `limit` productos (por defecto Top 10).
+
+    Esto permite que un producto que esté vendiendo mucho esta semana
+    aparezca arriba en el ranking, aunque históricamente tenga menos ventas totales.
+    """
+    import logging
+
+    logger = logging.getLogger(__name__)
+
+    try:
+        # Fecha límite: hoy - N días
+        now_utc = datetime.utcnow()
+        from_date = now_utc - timedelta(days=days if days > 0 else 7)
+
+        # Subconsulta: ventas por producto en la ventana de tiempo
+        weekly_sales_subquery = (
+            db.query(
+                OrderItem.product_id,
+                func.coalesce(func.sum(OrderItem.quantity), 0).label("sold_qty_week"),
+            )
+            .join(Order, OrderItem.order_id == Order.id)
+            .filter(
+                Order.status == "PAID",
+                Order.created_at >= from_date,
+            )
+            .group_by(OrderItem.product_id)
+            .subquery()
+        )
+
+        # Consulta principal: solo productos activos que hayan vendido algo en la semana
+        products_with_weekly_sales = (
+            db.query(
+                Product.id,
+                Product.name,
+                Product.club_name,
+                Product.preview_image_url,
+                Product.slug,
+                func.coalesce(weekly_sales_subquery.c.sold_qty_week, 0).label(
+                    "sales_count"
+                ),
+            )
+            .join(
+                weekly_sales_subquery,
+                Product.id == weekly_sales_subquery.c.product_id,
+            )  # INNER JOIN para traer solo los que tuvieron ventas en la ventana
+            .filter(Product.is_active == True)
+            .order_by(
+                desc("sales_count"),  # Más vendidos en la semana primero
+                func.coalesce(Product.club_name, Product.name).asc(),
+            )
+            .limit(limit if limit > 0 else 10)
+            .all()
+        )
+
+        ranking: List[ProductSalesRanking] = []
+        for p in products_with_weekly_sales:
+            ranking.append(
+                ProductSalesRanking(
+                    id=p.id,
+                    name=p.name,
+                    club_name=p.club_name,
+                    sales_count=p.sales_count or 0,
+                    preview_image_url=p.preview_image_url,
+                    slug=p.slug,
+                )
+            )
+
+        return SalesRankingResponse(ranking=ranking)
+
+    except Exception as e:
+        logger.error(f"Error al obtener ranking de tendencias: {e}", exc_info=True)
         return SalesRankingResponse(ranking=[])
 
 
