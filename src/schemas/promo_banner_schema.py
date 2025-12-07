@@ -27,3 +27,14 @@ class PromoBannerOut(PromoBannerBase):
         from_attributes = True
 
 
+class PromoBannerSettingsOut(BaseModel):
+    change_interval_seconds: int
+
+    class Config:
+        from_attributes = True
+
+
+class PromoBannerSettingsUpdate(BaseModel):
+    change_interval_seconds: int
+
+

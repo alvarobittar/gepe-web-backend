@@ -34,6 +34,7 @@ from .models.cart import CartItem  # noqa: F401
 from .models.order import Order  # noqa: F401
 from .models.payment import Payment  # noqa: F401
 from .models.promo_banner import PromoBanner  # noqa: F401
+from .models.promo_banner_settings import PromoBannerSettings  # noqa: F401
 from .models.club import Club  # noqa: F401
 from .models.notification_email import NotificationEmail  # noqa: F401
 

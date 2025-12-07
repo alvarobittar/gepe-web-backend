@@ -454,14 +454,48 @@ async def upload_product_image(file: UploadFile = File(...)):
     Subir una imagen de producto a Cloudinary.
     
     Devuelve la URL pública de la imagen subida.
+    Límite máximo: 10MB
     """
     from ..services.cloudinary_service import upload_product_image as upload_fn
     
     if not file.content_type or not file.content_type.startswith("image/"):
         raise HTTPException(status_code=400, detail="El archivo debe ser una imagen")
     
+    # Validar tamaño del archivo (10MB máximo)
+    MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
+    file_size = 0
+    file_content = await file.read()
+    file_size = len(file_content)
+    
+    if file_size > MAX_FILE_SIZE:
+        raise HTTPException(
+            status_code=413,
+            detail=f"El archivo es demasiado grande. Tamaño máximo: 10MB. Tamaño actual: {file_size / (1024 * 1024):.2f}MB"
+        )
+    
+    # Resetear el archivo para poder leerlo de nuevo
+    await file.seek(0)
+    
     try:
         result = await upload_fn(file)
-        return {"url": result["url"]}
+        return {"url": result["url"], "public_id": result.get("public_id")}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error al subir la imagen: {str(e)}")
+
+
+@router.delete("/delete-image")
+async def delete_product_image(url: str = Query(..., description="URL de la imagen en Cloudinary")):
+    """
+    Eliminar una imagen de Cloudinary.
+    
+    Extrae el public_id de la URL y elimina la imagen.
+    """
+    from ..services.cloudinary_service import delete_image_from_url
+    
+    try:
+        success = delete_image_from_url(url)
+        if not success:
+            raise HTTPException(status_code=404, detail="No se pudo eliminar la imagen")
+        return {"message": "Imagen eliminada correctamente"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error al eliminar la imagen: {str(e)}")

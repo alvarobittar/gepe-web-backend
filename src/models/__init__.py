@@ -7,6 +7,7 @@ from .cart import CartItem
 from .order import Order, OrderItem
 from .payment import Payment
 from .promo_banner import PromoBanner
+from .promo_banner_settings import PromoBannerSettings
 
 __all__ = [
     "User",
@@ -20,5 +21,6 @@ __all__ = [
     "OrderItem",
     "Payment",
     "PromoBanner",
+    "PromoBannerSettings",
 ]
 
