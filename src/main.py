@@ -4,7 +4,21 @@ from pathlib import Path
 from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from .routers import products, clubs, stats, cart, user, promo_banner, payments, orders, categories, payment_details, settings
+from .routers import (
+    products,
+    clubs,
+    stats,
+    cart,
+    user,
+    promo_banner,
+    hero_media,
+    payments,
+    orders,
+    categories,
+    payment_details,
+    settings,
+    addresses,
+)
 from .config import get_settings, clear_settings_cache
 from .database import Base, engine
 
@@ -30,6 +44,7 @@ clear_settings_cache()
 from .models.product import Product, Category, ProductSizeStock  # noqa: F401
 from .models.product_price_settings import ProductPriceSettings  # noqa: F401
 from .models.user import User  # noqa: F401
+from .models.address import Address  # noqa: F401
 from .models.cart import CartItem  # noqa: F401
 from .models.order import Order  # noqa: F401
 from .models.payment import Payment  # noqa: F401
@@ -37,6 +52,7 @@ from .models.promo_banner import PromoBanner  # noqa: F401
 from .models.promo_banner_settings import PromoBannerSettings  # noqa: F401
 from .models.club import Club  # noqa: F401
 from .models.notification_email import NotificationEmail  # noqa: F401
+from .models.hero_media import HeroMedia  # noqa: F401
 
 app_settings = get_settings()
 logger.info(f"🔧 CORS_ORIGIN configurado al iniciar: {app_settings.cors_origin}")
@@ -241,6 +257,29 @@ def create_tables():
         except Exception as e:
             logger.warning(f"⚠️ Error durante migración de products: {e}")
 
+        # Migrar columnas faltantes en hero_media (focus point) si es necesario
+        try:
+            inspector = inspect(engine)
+            if "hero_media" in inspector.get_table_names():
+                hero_media_columns = {col["name"]: col["type"] for col in inspector.get_columns("hero_media")}
+
+                required_hero_columns = {
+                    "image_focus_x": "INTEGER DEFAULT 50",
+                    "image_focus_y": "INTEGER DEFAULT 50",
+                }
+
+                with engine.connect() as conn:
+                    for col_name, col_type in required_hero_columns.items():
+                        if col_name not in hero_media_columns:
+                            try:
+                                conn.execute(text(f"ALTER TABLE hero_media ADD COLUMN {col_name} {col_type}"))
+                                conn.commit()
+                                logger.info(f"✅ Columna agregada a hero_media: {col_name}")
+                            except Exception as e:
+                                logger.warning(f"⚠️ No se pudo agregar columna {col_name} a hero_media: {e}")
+        except Exception as e:
+            logger.warning(f"⚠️ Error durante migración de hero_media: {e}")
+
         # Inicializar precios globales si la tabla existe pero está vacía
         try:
             from .models.product_price_settings import ProductPriceSettings
@@ -292,11 +331,13 @@ app.include_router(stats.router, prefix="/api")
 app.include_router(cart.router, prefix="/api")
 app.include_router(user.router, prefix="/api")
 app.include_router(promo_banner.router, prefix="/api")
+app.include_router(hero_media.router, prefix="/api")
 app.include_router(payments.router, prefix="/api/payments")
 app.include_router(orders.router, prefix="/api")
 app.include_router(categories.router, prefix="/api")
 app.include_router(payment_details.router, prefix="/api")
 app.include_router(settings.router, prefix="/api")
+app.include_router(addresses.router, prefix="/api")
 
 
 @app.get("/", tags=["root"])  # Simple welcome endpoint

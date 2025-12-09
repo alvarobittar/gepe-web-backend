@@ -6,13 +6,22 @@ import cloudinary.uploader
 from fastapi import UploadFile
 import os
 
-# Configure Cloudinary from environment variables
-cloudinary.config(
-    cloud_name=os.getenv("CLOUDINARY_CLOUD_NAME"),
-    api_key=os.getenv("CLOUDINARY_API_KEY"),
-    api_secret=os.getenv("CLOUDINARY_API_SECRET"),
-    secure=True
-)
+_cloudinary_configured = False
+
+
+def _ensure_cloudinary_configured():
+    """Configure Cloudinary lazily to ensure env vars are loaded."""
+    global _cloudinary_configured
+    if _cloudinary_configured:
+        return
+    
+    cloudinary.config(
+        cloud_name=os.getenv("CLOUDINARY_CLOUD_NAME"),
+        api_key=os.getenv("CLOUDINARY_API_KEY"),
+        api_secret=os.getenv("CLOUDINARY_API_SECRET"),
+        secure=True
+    )
+    _cloudinary_configured = True
 
 
 async def upload_image(file: UploadFile, folder: str = "gepe") -> dict:
@@ -26,6 +35,7 @@ async def upload_image(file: UploadFile, folder: str = "gepe") -> dict:
     Returns:
         dict with 'url' (secure URL) and 'public_id'
     """
+    _ensure_cloudinary_configured()
     try:
         # Read the file content
         contents = await file.read()
@@ -71,6 +81,7 @@ def delete_image(public_id: str) -> bool:
     Returns:
         True if deleted successfully
     """
+    _ensure_cloudinary_configured()
     try:
         result = cloudinary.uploader.destroy(public_id)
         return result.get("result") == "ok"
