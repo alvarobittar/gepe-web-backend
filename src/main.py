@@ -278,6 +278,14 @@ def create_tables():
                                 logger.info(f"✅ Columna agregada a hero_media: {col_name}")
                             except Exception as e:
                                 logger.warning(f"⚠️ No se pudo agregar columna {col_name} a hero_media: {e}")
+                    
+                    # Extend video_url column size to accommodate long Instagram URLs
+                    try:
+                        conn.execute(text("ALTER TABLE hero_media ALTER COLUMN video_url TYPE VARCHAR(2000)"))
+                        conn.commit()
+                        logger.info("✅ Columna video_url extendida a VARCHAR(2000)")
+                    except Exception as e:
+                        logger.warning(f"⚠️ No se pudo extender video_url: {e}")
         except Exception as e:
             logger.warning(f"⚠️ Error durante migración de hero_media: {e}")
 

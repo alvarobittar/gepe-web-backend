@@ -75,15 +75,7 @@ def list_clubs(
     return _list_clubs_impl(city_key, slug, only_active, db)
 
 
-@router.post("/", response_model=ClubOut, status_code=201)
-def create_club(payload: ClubCreate, db: Session = Depends(get_db)):
-    """
-    Crear un nuevo club.
-
-    - Genera automáticamente un slug único a partir del nombre.
-    - city_key debe coincidir con una de las claves usadas en el frontend
-      (sanRafael, generalAlvear, malargue, sanLuis, mendoza, neuquen).
-    """
+def _create_club_impl(payload: ClubCreate, db: Session):
     if not payload.name.strip():
         raise HTTPException(status_code=400, detail="El nombre del club es obligatorio")
 
@@ -119,6 +111,22 @@ def create_club(payload: ClubCreate, db: Session = Depends(get_db)):
     db.refresh(club)
 
     return club
+
+
+@router.post("/", response_model=ClubOut, status_code=201)
+def create_club(payload: ClubCreate, db: Session = Depends(get_db)):
+    """
+    Crear un nuevo club (con slash).
+    """
+    return _create_club_impl(payload, db)
+
+
+@router.post("", response_model=ClubOut, status_code=201)
+def create_club_no_slash(payload: ClubCreate, db: Session = Depends(get_db)):
+    """
+    Crear un nuevo club (sin slash final) para evitar 405 cuando redirect_slashes está deshabilitado.
+    """
+    return _create_club_impl(payload, db)
 
 
 @router.get("/{club_id}", response_model=ClubOut)
