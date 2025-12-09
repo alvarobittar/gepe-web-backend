@@ -11,7 +11,7 @@ from ..schemas.hero_media_schema import (
     HeroMediaOut,
     HeroMediaUpdate,
 )
-from ..services.cloudinary_service import upload_image
+from ..services.cloudinary_service import upload_image, upload_video
 
 
 router = APIRouter(prefix="/hero-media", tags=["hero-media"])
@@ -175,22 +175,31 @@ def delete_hero_media(hero_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/admin/upload")
-async def upload_hero_media_image(file: UploadFile = File(...)):
+async def upload_hero_media(file: UploadFile = File(...)):
     """
-    Upload an image for hero media to Cloudinary.
-    Returns the URL of the uploaded image.
+    Upload an image or video for hero media to Cloudinary.
+    Returns the URL of the uploaded asset.
     """
-    if not file.content_type or not file.content_type.startswith("image/"):
+    if not file.content_type:
+        raise HTTPException(status_code=400, detail="Tipo de archivo no válido")
+
+    is_image = file.content_type.startswith("image/")
+    is_video = file.content_type.startswith("video/")
+
+    if not (is_image or is_video):
         raise HTTPException(
             status_code=400,
-            detail="El archivo debe ser una imagen"
+            detail="El archivo debe ser una imagen o video",
         )
-    
+
     try:
-        result = await upload_image(file, folder="gepe/hero")
-        return {"url": result["url"], "public_id": result["public_id"]}
+        if is_video:
+            result = await upload_video(file, folder="gepe/hero")
+        else:
+            result = await upload_image(file, folder="gepe/hero")
+        return {"url": result["url"], "public_id": result["public_id"], "type": "video" if is_video else "image"}
     except Exception as e:
         raise HTTPException(
             status_code=500,
-            detail=f"Error al subir imagen: {str(e)}"
+            detail=f"Error al subir archivo: {str(e)}"
         )
