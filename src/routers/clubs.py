@@ -6,9 +6,28 @@ from sqlalchemy.orm import Session
 from ..database import get_db
 from ..models.club import Club
 from ..schemas.club_schema import ClubCreate, ClubUpdate, ClubOut
-from ..utils import slugify
 
 router = APIRouter(prefix="/clubs", tags=["clubs"])
+
+
+def _slugify(name: str) -> str:
+    """
+    Genera un slug sencillo a partir del nombre del club.
+    """
+    import re
+
+    slug = name.lower()
+    # Eliminar tildes
+    slug = (
+        slug.replace("á", "a")
+        .replace("é", "e")
+        .replace("í", "i")
+        .replace("ó", "o")
+        .replace("ú", "u")
+        .replace("ñ", "n")
+    )
+    slug = re.sub(r"[^a-z0-9]+", "-", slug).strip("-")
+    return slug
 
 
 def _list_clubs_impl(
@@ -75,7 +94,15 @@ def list_clubs(
     return _list_clubs_impl(city_key, slug, only_active, db)
 
 
-def _create_club_impl(payload: ClubCreate, db: Session):
+@router.post("/", response_model=ClubOut, status_code=201)
+def create_club(payload: ClubCreate, db: Session = Depends(get_db)):
+    """
+    Crear un nuevo club.
+
+    - Genera automáticamente un slug único a partir del nombre.
+    - city_key debe coincidir con una de las claves usadas en el frontend
+      (sanRafael, generalAlvear, malargue, sanLuis, mendoza, neuquen).
+    """
     if not payload.name.strip():
         raise HTTPException(status_code=400, detail="El nombre del club es obligatorio")
 
@@ -87,7 +114,7 @@ def _create_club_impl(payload: ClubCreate, db: Session):
     if existing_by_name:
         raise HTTPException(status_code=400, detail="Ya existe un club con ese nombre")
 
-    base_slug = slugify(payload.name)
+    base_slug = _slugify(payload.name)
     if not base_slug:
         raise HTTPException(status_code=400, detail="No se pudo generar un slug para el club")
 
@@ -111,22 +138,6 @@ def _create_club_impl(payload: ClubCreate, db: Session):
     db.refresh(club)
 
     return club
-
-
-@router.post("/", response_model=ClubOut, status_code=201)
-def create_club(payload: ClubCreate, db: Session = Depends(get_db)):
-    """
-    Crear un nuevo club (con slash).
-    """
-    return _create_club_impl(payload, db)
-
-
-@router.post("", response_model=ClubOut, status_code=201)
-def create_club_no_slash(payload: ClubCreate, db: Session = Depends(get_db)):
-    """
-    Crear un nuevo club (sin slash final) para evitar 405 cuando redirect_slashes está deshabilitado.
-    """
-    return _create_club_impl(payload, db)
 
 
 @router.get("/{club_id}", response_model=ClubOut)
@@ -168,7 +179,7 @@ def update_club(club_id: int, payload: ClubUpdate, db: Session = Depends(get_db)
         club.name = new_name
 
         # Recalcular slug a partir del nuevo nombre
-        base_slug = slugify(new_name)
+        base_slug = _slugify(new_name)
         if not base_slug:
             raise HTTPException(status_code=400, detail="No se pudo generar un slug para el club")
 
