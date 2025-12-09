@@ -34,3 +34,4 @@ Write-Host "Presiona Ctrl+C para detener el servidor" -ForegroundColor Cyan
 & $pythonExe -m uvicorn src.main:app --reload --port 8000
 
 
+
