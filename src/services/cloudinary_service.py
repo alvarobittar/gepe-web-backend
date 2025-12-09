@@ -61,6 +61,31 @@ async def upload_image(file: UploadFile, folder: str = "gepe") -> dict:
         raise Exception(f"Error uploading to Cloudinary: {str(e)}")
 
 
+async def upload_video(file: UploadFile, folder: str = "gepe") -> dict:
+    """
+    Upload a video to Cloudinary.
+    """
+    _ensure_cloudinary_configured()
+    try:
+        contents = await file.read()
+        result = cloudinary.uploader.upload(
+            contents,
+            folder=folder,
+            resource_type="video",
+            use_filename=True,
+            unique_filename=True,
+            # Let Cloudinary optimize format/quality
+            quality="auto",
+            fetch_format="auto",
+        )
+        return {
+            "url": result["secure_url"],
+            "public_id": result["public_id"],
+        }
+    except Exception as e:
+        raise Exception(f"Error uploading video to Cloudinary: {str(e)}")
+
+
 async def upload_club_crest(file: UploadFile) -> dict:
     """Upload a club crest image."""
     return await upload_image(file, folder="gepe/clubs")

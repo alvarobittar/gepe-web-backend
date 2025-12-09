@@ -18,6 +18,7 @@ from .routers import (
     payment_details,
     settings,
     addresses,
+    returns,
 )
 from .config import get_settings, clear_settings_cache
 from .database import Base, engine
@@ -277,6 +278,14 @@ def create_tables():
                                 logger.info(f"✅ Columna agregada a hero_media: {col_name}")
                             except Exception as e:
                                 logger.warning(f"⚠️ No se pudo agregar columna {col_name} a hero_media: {e}")
+                    
+                    # Extend video_url column size to accommodate long Instagram URLs
+                    try:
+                        conn.execute(text("ALTER TABLE hero_media ALTER COLUMN video_url TYPE VARCHAR(2000)"))
+                        conn.commit()
+                        logger.info("✅ Columna video_url extendida a VARCHAR(2000)")
+                    except Exception as e:
+                        logger.warning(f"⚠️ No se pudo extender video_url: {e}")
         except Exception as e:
             logger.warning(f"⚠️ Error durante migración de hero_media: {e}")
 
@@ -338,6 +347,7 @@ app.include_router(categories.router, prefix="/api")
 app.include_router(payment_details.router, prefix="/api")
 app.include_router(settings.router, prefix="/api")
 app.include_router(addresses.router, prefix="/api")
+app.include_router(returns.router, prefix="/api")
 
 
 @app.get("/", tags=["root"])  # Simple welcome endpoint

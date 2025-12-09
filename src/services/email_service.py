@@ -317,6 +317,80 @@ async def send_test_email(email: str) -> bool:
         return False
 
 
+async def send_regret_notification_email(form_data: dict, admin_emails: List[str]) -> bool:
+    """
+    Envía email de arrepentimiento de compra a los admin emails configurados.
+    """
+    if not _is_email_service_configured():
+        logger.warning("Servicio de email no configurado, no se enviará notificación de arrepentimiento")
+        return False
+
+    if not admin_emails:
+        logger.warning("No hay emails de administradores configurados para recibir notificaciones")
+        return False
+
+    try:
+        resend.api_key = _get_resend_api_key()
+
+        cliente_nombre = f"{form_data.get('nombre','').strip()} {form_data.get('apellido','').strip()}".strip()
+        numero_pedido = form_data.get("numeroPedido") or "No especificado"
+        articulos = form_data.get("articulosComprados") or "No especificado"
+        telefono = form_data.get("telefono") or "No especificado"
+        correo = form_data.get("correo") or "No especificado"
+        dni = form_data.get("dni") or "No especificado"
+        ciudad = form_data.get("ciudad") or "No especificada"
+        motivo = form_data.get("motivo") or "No especificado"
+
+        html_content = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        </head>
+        <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #1f2937; max-width: 640px; margin: 0 auto; padding: 24px; background: #f9fafb;">
+            <div style="background: #111827; color: white; padding: 20px; border-radius: 12px 12px 0 0; text-align: center;">
+                <h1 style="margin: 0; font-size: 22px;">🛑 Arrepentimiento de compra</h1>
+            </div>
+            <div style="background: white; padding: 24px; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 12px 12px;">
+                <p style="margin: 0 0 12px 0;">Se recibió una solicitud de arrepentimiento de compra.</p>
+                <h3 style="margin: 16px 0 8px 0; color: #111827;">Datos del cliente</h3>
+                <table style="width: 100%; border-collapse: collapse;">
+                    <tr><td style="padding: 6px 0; color: #6b7280;">Nombre</td><td style="padding: 6px 0; font-weight: 600;">{cliente_nombre or 'No especificado'}</td></tr>
+                    <tr><td style="padding: 6px 0; color: #6b7280;">DNI</td><td style="padding: 6px 0; font-weight: 600;">{dni}</td></tr>
+                    <tr><td style="padding: 6px 0; color: #6b7280;">Ciudad</td><td style="padding: 6px 0; font-weight: 600;">{ciudad}</td></tr>
+                    <tr><td style="padding: 6px 0; color: #6b7280;">Teléfono</td><td style="padding: 6px 0; font-weight: 600;">{telefono}</td></tr>
+                    <tr><td style="padding: 6px 0; color: #6b7280;">Correo</td><td style="padding: 6px 0; font-weight: 600;">{correo}</td></tr>
+                </table>
+
+                <h3 style="margin: 16px 0 8px 0; color: #111827;">Detalle de la compra</h3>
+                <table style="width: 100%; border-collapse: collapse;">
+                    <tr><td style="padding: 6px 0; color: #6b7280;">N° Pedido</td><td style="padding: 6px 0; font-weight: 600;">{numero_pedido}</td></tr>
+                    <tr><td style="padding: 6px 0; color: #6b7280;">Artículos</td><td style="padding: 6px 0; font-weight: 600;">{articulos}</td></tr>
+                </table>
+
+                <h3 style="margin: 16px 0 8px 0; color: #111827;">Motivo</h3>
+                <div style="padding: 12px; background: #f3f4f6; border-radius: 8px; color: #374151;">{motivo}</div>
+            </div>
+            <p style="text-align: center; color: #9ca3af; font-size: 12px; margin-top: 12px;">GEPE Notificaciones</p>
+        </body>
+        </html>
+        """
+
+        params = {
+            "from": os.getenv("RESEND_FROM_EMAIL", "GEPE <notificaciones@gepe.com.ar>"),
+            "to": admin_emails,
+            "subject": f"🛑 Arrepentimiento de compra - Pedido {numero_pedido}",
+            "html": html_content,
+        }
+        resend.Emails.send(params)
+        logger.info("Email de arrepentimiento enviado a admins")
+        return True
+    except Exception as e:
+        logger.error(f"Error al enviar email de arrepentimiento: {e}", exc_info=True)
+        return False
+
+
 async def send_sale_notification_email(order, admin_emails: List[str]) -> bool:
     """
     Envía un email de notificación a los administradores cuando se realiza una venta.

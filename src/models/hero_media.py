@@ -11,7 +11,7 @@ class HeroMedia(Base):
     subtitle = Column(String(255), nullable=True)
     highlight = Column(String(255), nullable=True)
     image_url = Column(String(500), nullable=False)
-    video_url = Column(String(1000), nullable=True)
+    video_url = Column(String(2000), nullable=True)
     # Focus point for image cropping (0-100, where 50,50 is center)
     image_focus_x = Column(Integer, default=50)
     image_focus_y = Column(Integer, default=50)
