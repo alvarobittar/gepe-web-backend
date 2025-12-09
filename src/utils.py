@@ -8,31 +8,33 @@ def slugify(text: str) -> str:
     Ejemplos:
     - "Club Atlético San Luis" -> "club-atletico-san-luis"
     - "Camiseta Élite" -> "camiseta-elite"
+    - "San Martín de Monte Comán" -> "san-martin-de-monte-coman"
     """
+    import unicodedata
+    
     if not text:
         return ""
     
+    # Convertir a minúsculas y eliminar espacios al inicio/final
     slug = text.lower().strip()
     
-    # Normalizar tildes y caracteres especiales
-    slug = (
-        slug.replace("á", "a")
-        .replace("é", "e")
-        .replace("í", "i")
-        .replace("ó", "o")
-        .replace("ú", "u")
-        .replace("ñ", "n")
-        .replace("ü", "u")
-    )
+    # Normalizar Unicode: NFD separa caracteres base de diacríticos
+    slug = unicodedata.normalize('NFD', slug)
     
-    # Reemplazar cualquier carácter que no sea letra, número o espacio con un guión
-    slug = re.sub(r"[^a-z0-9\s]+", "-", slug)
+    # Eliminar diacríticos (tildes, acentos)
+    slug = ''.join(char for char in slug if unicodedata.category(char) != 'Mn')
     
-    # Reemplazar espacios y múltiples guiones consecutivos con un solo guión
-    slug = re.sub(r"[\s\-]+", "-", slug)
+    # Reemplazar espacios por guiones
+    slug = re.sub(r'\s+', '-', slug)
+    
+    # Eliminar cualquier carácter que no sea letra, número o guión
+    slug = re.sub(r'[^a-z0-9\-]+', '', slug)
+    
+    # Reemplazar múltiples guiones consecutivos con uno solo
+    slug = re.sub(r'\-+', '-', slug)
     
     # Eliminar guiones al inicio y al final
-    slug = slug.strip("-")
+    slug = slug.strip('-')
     
     return slug
 
