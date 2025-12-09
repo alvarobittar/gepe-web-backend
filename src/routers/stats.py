@@ -48,6 +48,7 @@ class TopProductStats(BaseModel):
     stock: int
     price: float
     total_revenue: float
+    slug: Optional[str] = None
 
 
 class RecentOrderStats(BaseModel):
@@ -372,12 +373,14 @@ def get_dashboard_stats(db: Session = Depends(get_db)):
                 category_name = None
                 stock = 0
                 price = 0.0
+                slug = None
                 
                 if product:
                     if product.category:
                         category_name = product.category.name
                     stock = product.stock or 0
                     price = product.price or 0.0
+                    slug = product.slug
                 
                 online_quantity = item.online_quantity or 0
                 total_quantity = online_quantity + manual_adjustment
@@ -390,7 +393,8 @@ def get_dashboard_stats(db: Session = Depends(get_db)):
                     "total_quantity": total_quantity,
                     "stock": stock,
                     "price": price,
-                    "total_revenue": total_revenue
+                    "total_revenue": total_revenue,
+                    "slug": slug
                 }
             
             # Agregar productos con solo ventas manuales (sin órdenes online)
@@ -408,7 +412,8 @@ def get_dashboard_stats(db: Session = Depends(get_db)):
                         "total_quantity": product.manual_sales_adjustment or 0,
                         "stock": product.stock or 0,
                         "price": product.price or 0.0,
-                        "total_revenue": 0.0  # Sin revenue real si no hay órdenes
+                        "total_revenue": 0.0,  # Sin revenue real si no hay órdenes
+                        "slug": product.slug
                     }
             
             # Ordenar por cantidad total y tomar top 4
@@ -421,7 +426,8 @@ def get_dashboard_stats(db: Session = Depends(get_db)):
                     total_quantity=ps["total_quantity"],
                     stock=ps["stock"],
                     price=ps["price"],
-                    total_revenue=ps["total_revenue"]
+                    total_revenue=ps["total_revenue"],
+                    slug=ps.get("slug")
                 ))
         except Exception as e:
             logger.warning(f"Error al obtener top productos: {e}")
