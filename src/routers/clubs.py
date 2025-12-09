@@ -140,6 +140,15 @@ def create_club(payload: ClubCreate, db: Session = Depends(get_db)):
     return club
 
 
+@router.post("", response_model=ClubOut, status_code=201)
+def create_club_no_slash(payload: ClubCreate, db: Session = Depends(get_db)):
+    """
+    Crear un nuevo club (sin slash final).
+    Endpoint alternativo para evitar 405 cuando redirect_slashes está deshabilitado.
+    """
+    return create_club(payload, db)
+
+
 @router.get("/{club_id}", response_model=ClubOut)
 def get_club(club_id: int, db: Session = Depends(get_db)):
     club = db.query(Club).filter(Club.id == club_id).first()
