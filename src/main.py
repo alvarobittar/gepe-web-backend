@@ -18,6 +18,7 @@ from .routers import (
     payment_details,
     settings,
     addresses,
+    returns,
 )
 from .config import get_settings, clear_settings_cache
 from .database import Base, engine
@@ -338,6 +339,7 @@ app.include_router(categories.router, prefix="/api")
 app.include_router(payment_details.router, prefix="/api")
 app.include_router(settings.router, prefix="/api")
 app.include_router(addresses.router, prefix="/api")
+app.include_router(returns.router, prefix="/api")
 
 
 @app.get("/", tags=["root"])  # Simple welcome endpoint

@@ -347,56 +347,40 @@ def update_product(
     if not product:
         raise HTTPException(status_code=404, detail="Producto no encontrado")
     
-    # Actualizar campos proporcionados
-    if product_data.name is not None:
-        product.name = product_data.name
-    if product_data.description is not None:
-        product.description = product_data.description
-    if product_data.price is not None:
-        product.price = product_data.price
-    if product_data.gender is not None:
-        product.gender = product_data.gender
-    if product_data.club_name is not None:
-        product.club_name = product_data.club_name
-    if product_data.category_id is not None:
-        # Verificar que la categoría existe
-        if product_data.category_id:
-            category = db.query(Category).filter(Category.id == product_data.category_id).first()
-            if not category:
-                raise HTTPException(status_code=404, detail="Categoría no encontrada")
-        product.category_id = product_data.category_id
+    # Obtener dict con solo los campos enviados (exclude_unset=True)
+    # Esto permite distinguir entre "campo no enviado" y "campo enviado como null"
+    # Para Pydantic v2 sería product_data.model_dump(exclude_unset=True)
+    # Para Pydantic v1 es .dict(exclude_unset=True)
+    update_data = product_data.dict(exclude_unset=True)
+
+    # 1. Validar categoría si se está actualizando
+    if "category_id" in update_data and update_data["category_id"] is not None:
+        category = db.query(Category).filter(Category.id == update_data["category_id"]).first()
+        if not category:
+            raise HTTPException(status_code=404, detail="Categoría no encontrada")
+
+    # 2. Manejo especial de cambio de nombre -> Slug
     # Si cambia el nombre, regenerar el slug automáticamente
-    if product_data.name is not None and product_data.name != product.name:
-        new_slug = slugify(product_data.name)
+    if "name" in update_data and update_data["name"] != product.name:
+        new_name = update_data["name"]
+        new_slug = slugify(new_name)
         # Asegurar que el slug sea único (excepto para este producto)
         base_slug = new_slug
         counter = 1
         while db.query(Product).filter(Product.slug == new_slug, Product.id != product_id).first():
             new_slug = f"{base_slug}-{counter}"
             counter += 1
-        product.slug = new_slug
-    if product_data.is_active is not None:
-        product.is_active = product_data.is_active
-    if product_data.price_hincha is not None:
-        product.price_hincha = product_data.price_hincha
-        # Mantener price base alineado con el precio hincha
-        product.price = product_data.price_hincha
-    if product_data.price_jugador is not None:
-        product.price_jugador = product_data.price_jugador
-    if product_data.price_profesional is not None:
-        product.price_profesional = product_data.price_profesional
-    if product_data.preview_image_url is not None:
-        product.preview_image_url = product_data.preview_image_url
-    if product_data.image1_url is not None:
-        product.image1_url = product_data.image1_url
-    if product_data.image2_url is not None:
-        product.image2_url = product_data.image2_url
-    if product_data.image3_url is not None:
-        product.image3_url = product_data.image3_url
-    if product_data.image4_url is not None:
-        product.image4_url = product_data.image4_url
-    if product_data.manual_sales_adjustment is not None:
-        product.manual_sales_adjustment = product_data.manual_sales_adjustment
+        update_data["slug"] = new_slug
+    
+    # 3. Manejo especial de precio hincha -> precio base
+    if "price_hincha" in update_data and update_data["price_hincha"] is not None:
+        update_data["price"] = update_data["price_hincha"]
+
+    # 4. Aplicar cambios genéricos
+    for field, value in update_data.items():
+        # Verificar que el modelo tenga este campo antes de setearlo
+        if hasattr(product, field):
+            setattr(product, field, value)
     
     db.commit()
     db.refresh(product)
