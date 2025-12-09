@@ -336,6 +336,15 @@ def create_product(product_data: ProductCreate, db: Session = Depends(get_db)):
     return product
 
 
+@router.post("", response_model=ProductOut)
+def create_product_no_slash(product_data: ProductCreate, db: Session = Depends(get_db)):
+    """
+    Crear un nuevo producto (sin slash final).
+    Endpoint alternativo para evitar 405 cuando redirect_slashes está deshabilitado.
+    """
+    return create_product(product_data, db)
+
+
 @router.put("/{product_id}", response_model=ProductOut)
 def update_product(
     product_id: int,
