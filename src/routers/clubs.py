@@ -1,4 +1,5 @@
 from typing import List, Optional
+import asyncio
 
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
 from sqlalchemy.orm import Session
@@ -6,8 +7,20 @@ from sqlalchemy.orm import Session
 from ..database import get_db
 from ..models.club import Club
 from ..schemas.club_schema import ClubCreate, ClubUpdate, ClubOut
+from ..services.revalidation_service import revalidate_club
 
 router = APIRouter(prefix="/clubs", tags=["clubs"])
+
+
+def _trigger_club_revalidation(slug: str | None = None):
+    """Helper para disparar revalidación de clubes en background."""
+    try:
+        asyncio.create_task(revalidate_club(slug))
+    except RuntimeError:
+        loop = asyncio.new_event_loop()
+        loop.run_until_complete(revalidate_club(slug))
+        loop.close()
+
 
 
 def _slugify(name: str) -> str:
@@ -137,6 +150,9 @@ def create_club(payload: ClubCreate, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(club)
 
+    # Revalidar cache del frontend
+    _trigger_club_revalidation(club.slug)
+
     return club
 
 
@@ -231,6 +247,9 @@ def update_club(club_id: int, payload: ClubUpdate, db: Session = Depends(get_db)
     db.commit()
     db.refresh(club)
 
+    # Revalidar cache del frontend
+    _trigger_club_revalidation(club.slug)
+
     return club
 
 
@@ -253,8 +272,13 @@ def delete_club(club_id: int, db: Session = Depends(get_db)):
         except Exception as e:
             print(f"Error borrando escudo de Cloudinary al eliminar club: {e}")
 
+    slug = club.slug  # Guardar antes de borrar
     db.delete(club)
     db.commit()
+
+    # Revalidar cache del frontend
+    _trigger_club_revalidation(slug)
+
     return None
 
 

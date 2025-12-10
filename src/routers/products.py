@@ -1,6 +1,7 @@
 from typing import List, Optional
+import asyncio
 
-from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, BackgroundTasks
 from sqlalchemy.orm import Session, joinedload
 
 from ..database import get_db
@@ -14,8 +15,22 @@ from ..schemas.product_price_settings_schema import (
     ProductPriceSettingsOut, ProductPriceSettingsUpdate
 )
 from ..utils import slugify
+from ..services.revalidation_service import revalidate_product, revalidate_prices
 
 router = APIRouter(prefix="/products", tags=["products"])
+
+
+def _trigger_revalidation(slug: str | None = None):
+    """Helper para disparar revalidación en background."""
+    try:
+        asyncio.create_task(revalidate_product(slug))
+    except RuntimeError:
+        # Si no hay event loop, crear uno temporalmente
+        loop = asyncio.new_event_loop()
+        loop.run_until_complete(revalidate_product(slug))
+        loop.close()
+
+
 
 
 def _ensure_sample_data(db: Session) -> None:
@@ -183,6 +198,14 @@ def update_price_settings(
     db.commit()
     db.refresh(settings)
     
+    # Revalidar cache del frontend (precios cambiaron)
+    try:
+        asyncio.create_task(revalidate_prices())
+    except RuntimeError:
+        loop = asyncio.new_event_loop()
+        loop.run_until_complete(revalidate_prices())
+        loop.close()
+    
     return settings
 
 
@@ -333,6 +356,9 @@ def create_product(product_data: ProductCreate, db: Session = Depends(get_db)):
         Product.id == product.id
     ).first()
     
+    # Revalidar cache del frontend
+    _trigger_revalidation(product.slug)
+    
     return product
 
 
@@ -413,6 +439,9 @@ def update_product(
         Product.id == product.id
     ).first()
     
+    # Revalidar cache del frontend
+    _trigger_revalidation(product.slug)
+    
     return product
 
 
@@ -452,8 +481,12 @@ def delete_product(product_id: int, db: Session = Depends(get_db)):
         print(f"Error borrando imágenes de Cloudinary al eliminar producto: {e}")
     
     # Hard delete: eliminar físicamente el producto
+    slug = product.slug  # Guardar antes de borrar
     db.delete(product)
     db.commit()
+    
+    # Revalidar cache del frontend
+    _trigger_revalidation(slug)
     
     return {"message": "Producto eliminado correctamente"}
 
