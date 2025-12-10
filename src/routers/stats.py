@@ -76,6 +76,9 @@ class DashboardStatsResponse(BaseModel):
     top_products: List[TopProductStats]
     recent_orders: List[RecentOrderStats]
     sales_chart: List[SalesDataPoint]
+    # Nuevos bloques para gráficos del dashboard
+    order_status: dict
+    monthly_orders: List[dict]
 
 
 @router.get("/ranking")
@@ -493,6 +496,67 @@ def get_dashboard_stats(db: Session = Depends(get_db)):
                     date=day.strftime("%Y-%m-%d"),
                     revenue=0.0
                 ))
+
+        # --- Breakdown de estados de pedido (para donut) ---
+        # Reglas pedidas: Pendiente, Listo para enviar, Enviado, Cancelado
+        order_status_counts = {
+            "pending": 0,
+            "ready_to_ship": 0,
+            "shipped": 0,
+            "cancelled": 0,
+        }
+        try:
+            status_rows = (
+                db.query(Order.status, func.count(Order.id))
+                .group_by(Order.status)
+                .all()
+            )
+            for status, count in status_rows:
+                val = count or 0
+                if status == "PENDING":
+                    order_status_counts["pending"] += val
+                elif status in ["PAID", "IN_PRODUCTION"]:
+                    order_status_counts["ready_to_ship"] += val
+                elif status in ["SHIPPED", "DELIVERED"]:
+                    order_status_counts["shipped"] += val
+                elif status in ["CANCELLED", "REFUNDED"]:
+                    order_status_counts["cancelled"] += val
+        except Exception as e:
+            logger.warning(f"Error al calcular breakdown de estados: {e}")
+
+        # --- Serie mensual (dos barras: año actual vs año anterior) ---
+        monthly_orders: List[dict] = []
+        try:
+            now = datetime.utcnow()
+            current_year = now.year
+            previous_year = current_year - 1
+
+            def month_count(year: int, month: int) -> int:
+                start = datetime(year, month, 1)
+                if month == 12:
+                    end = datetime(year + 1, 1, 1)
+                else:
+                    end = datetime(year, month + 1, 1)
+                return (
+                    db.query(func.count(Order.id))
+                    .filter(
+                        Order.created_at >= start,
+                        Order.created_at < end,
+                        Order.status == "PAID",
+                    )
+                    .scalar()
+                    or 0
+                )
+
+            for m in range(1, 13):
+                monthly_orders.append({
+                    "label": datetime(2000, m, 1).strftime("%b"),
+                    "current": month_count(current_year, m),
+                    "previous": month_count(previous_year, m),
+                })
+        except Exception as e:
+            logger.warning(f"Error al calcular serie mensual: {e}")
+            monthly_orders = []
         
         return DashboardStatsResponse(
             products=products_count,
@@ -503,7 +567,9 @@ def get_dashboard_stats(db: Session = Depends(get_db)):
             new_customers=new_customers,
             top_products=top_products,
             recent_orders=recent_orders,
-            sales_chart=sales_chart
+            sales_chart=sales_chart,
+            order_status=order_status_counts,
+            monthly_orders=monthly_orders,
         )
     
     except Exception as e:
@@ -518,6 +584,8 @@ def get_dashboard_stats(db: Session = Depends(get_db)):
             new_customers=0,
             top_products=[],
             recent_orders=[],
-            sales_chart=[]
+            sales_chart=[],
+            order_status={"pending": 0, "ready_to_ship": 0, "shipped": 0, "cancelled": 0},
+            monthly_orders=[],
         )
 
