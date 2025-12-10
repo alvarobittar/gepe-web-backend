@@ -400,6 +400,7 @@ class ProductionOrdersResponse(BaseModel):
     sewing: List[ProductionOrder]
     printing: List[ProductionOrder]
     finished: List[ProductionOrder]
+    ready_for_shipment: List[ProductionOrder]
     total_count: int
 
 
@@ -436,7 +437,7 @@ async def list_production_orders(
     db: Session = Depends(get_db)
 ):
     """
-    Lista todos los pedidos PAGADOS para producción, agrupados por estado de producción.
+    Lista todos los pedidos PAGADOS o READY_FOR_SHIPMENT para producción, agrupados por estado de producción.
     
     IMPORTANTE: Solo muestra pedidos con status='PAID'.
     Los precios NO se incluyen en la respuesta (el taller no necesita verlos).
@@ -449,11 +450,11 @@ async def list_production_orders(
     - finished: Terminado
     """
     try:
-        # Solo obtener pedidos PAGADOS
+        # Obtener pedidos en producción (pagados o listos para enviar)
         orders = (
             db.query(Order)
             .options(joinedload(Order.items))
-            .filter(Order.status == "PAID")
+            .filter(Order.status.in_(["PAID", "READY_FOR_SHIPMENT"]))
             .order_by(Order.created_at.asc())  # Los más antiguos primero
             .all()
         )
@@ -464,11 +465,14 @@ async def list_production_orders(
         sewing = []
         printing = []
         finished = []
+        ready_for_shipment = []
         
         for order in orders:
             prod_order = _order_to_production_order(order)
             
-            if order.production_status == PRODUCTION_STATUS_CUTTING:
+            if order.status == "READY_FOR_SHIPMENT":
+                ready_for_shipment.append(prod_order)
+            elif order.production_status == PRODUCTION_STATUS_CUTTING:
                 cutting.append(prod_order)
             elif order.production_status == PRODUCTION_STATUS_SEWING:
                 sewing.append(prod_order)
@@ -486,6 +490,7 @@ async def list_production_orders(
             sewing=sewing,
             printing=printing,
             finished=finished,
+            ready_for_shipment=ready_for_shipment,
             total_count=len(orders)
         )
         
