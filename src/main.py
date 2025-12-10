@@ -21,7 +21,7 @@ from .routers import (
     returns,
 )
 from .config import get_settings, clear_settings_cache
-from .database import Base, engine
+from .database import Base, engine, fix_sequences
 
 # Configurar logging
 logging.basicConfig(level=logging.INFO)
@@ -329,6 +329,8 @@ def create_tables():
 # Crear tablas al iniciar (no bloquear el inicio si falla)
 try:
     create_tables()
+    # Arreglar secuencias de PostgreSQL (solo aplica a PostgreSQL)
+    fix_sequences()
 except Exception as e:
     logger.error(f"❌ Error al crear tablas al iniciar: {str(e)}", exc_info=True)
     logger.warning("⚠️ El servidor continuará iniciando, pero algunas funcionalidades pueden no estar disponibles")

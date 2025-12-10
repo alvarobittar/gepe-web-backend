@@ -19,6 +19,10 @@ class CartItemCreate(BaseModel):
     talle: str | None = None
 
 
+class CartItemUpdate(BaseModel):
+    quantity: int
+
+
 class CartItemOut(BaseModel):
     id: int
     product_id: int
@@ -104,6 +108,48 @@ def add_cart_item(payload: CartItemCreate, db: Session = Depends(get_db)):
         )
         db.add(item)
 
+    db.commit()
+    db.refresh(item)
+
+    # Calcular precio según calidad
+    price_settings = db.query(ProductPriceSettings).first()
+    default_prices = {
+        "HINCHA": 59900.0,
+        "JUGADOR": 69900.0,
+        "PROFESIONAL": 89900.0,
+    }
+    if price_settings:
+        default_prices = {
+            "HINCHA": price_settings.price_hincha,
+            "JUGADOR": price_settings.price_jugador,
+            "PROFESIONAL": price_settings.price_profesional,
+        }
+    calidad = (item.calidad or "JUGADOR").upper()
+    unit_price = default_prices.get(calidad, default_prices["JUGADOR"])
+
+    return CartItemOut(
+        id=item.id,
+        product_id=item.product_id,
+        product_name=item.product.name if item.product else "",
+        quantity=item.quantity,
+        calidad=item.calidad,
+        talle=item.talle,
+        preview_image_url=item.product.preview_image_url if item.product else None,
+        unit_price=unit_price,
+    )
+
+
+@router.put("/items/{item_id}", response_model=CartItemOut)
+def update_cart_item(item_id: int, payload: CartItemUpdate, db: Session = Depends(get_db)):
+    if payload.quantity < 1:
+        raise HTTPException(status_code=400, detail="La cantidad mínima es 1")
+
+    item = db.query(CartItem).filter(CartItem.id == item_id).first()
+    if not item:
+        raise HTTPException(status_code=404, detail="Item no encontrado")
+
+    item.quantity = payload.quantity
+    db.add(item)
     db.commit()
     db.refresh(item)
 
