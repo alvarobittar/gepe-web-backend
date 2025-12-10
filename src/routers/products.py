@@ -357,9 +357,6 @@ def update_product(
         raise HTTPException(status_code=404, detail="Producto no encontrado")
     
     # Obtener dict con solo los campos enviados (exclude_unset=True)
-    # Esto permite distinguir entre "campo no enviado" y "campo enviado como null"
-    # Para Pydantic v2 sería product_data.model_dump(exclude_unset=True)
-    # Para Pydantic v1 es .dict(exclude_unset=True)
     update_data = product_data.dict(exclude_unset=True)
 
     # 1. Validar categoría si se está actualizando
@@ -369,7 +366,6 @@ def update_product(
             raise HTTPException(status_code=404, detail="Categoría no encontrada")
 
     # 2. Manejo especial de cambio de nombre -> Slug
-    # Si cambia el nombre, regenerar el slug automáticamente
     if "name" in update_data and update_data["name"] != product.name:
         new_name = update_data["name"]
         new_slug = slugify(new_name)
@@ -385,7 +381,25 @@ def update_product(
     if "price_hincha" in update_data and update_data["price_hincha"] is not None:
         update_data["price"] = update_data["price_hincha"]
 
-    # 4. Aplicar cambios genéricos
+    # 4. Eliminar imágenes antiguas de Cloudinary si cambian
+    try:
+        from ..services.cloudinary_service import delete_image_from_url
+        image_fields = ["preview_image_url", "image1_url", "image2_url", "image3_url", "image4_url"]
+        
+        for field in image_fields:
+            if field in update_data:
+                new_url = update_data[field]
+                old_url = getattr(product, field)
+                # Si hay una URL antigua y es diferente a la nueva (y no es None), borrarla
+                # Nota: Si new_url es None, también borramos la antigua
+                if old_url and old_url != new_url:
+                    # No bloqueamos el flujo si falla el borrado, solo logueamos (idealmente)
+                    # Aquí lo hacemos simple
+                    delete_image_from_url(old_url)
+    except Exception as e:
+        print(f"Error borrando imagen antigua de Cloudinary: {e}")
+
+    # 5. Aplicar cambios genéricos
     for field, value in update_data.items():
         # Verificar que el modelo tenga este campo antes de setearlo
         if hasattr(product, field):
@@ -421,13 +435,21 @@ def delete_product(product_id: int, db: Session = Depends(get_db)):
             detail="No se puede eliminar un producto activo. Primero debes desactivarlo."
         )
     
-    # Eliminar primero los items del carrito asociados (tiene ForeignKey constraint)
+    # Eliminar primero los items del carrito asociados
     cart_items = db.query(CartItem).filter(CartItem.product_id == product_id).all()
     for cart_item in cart_items:
         db.delete(cart_item)
     
-    # ProductSizeStock se eliminará automáticamente por cascade
-    # OrderItem no tiene ForeignKey constraint, así que no causa problemas
+    # Eliminar imágenes de Cloudinary
+    try:
+        from ..services.cloudinary_service import delete_image_from_url
+        image_fields = ["preview_image_url", "image1_url", "image2_url", "image3_url", "image4_url"]
+        for field in image_fields:
+            url = getattr(product, field)
+            if url:
+                delete_image_from_url(url)
+    except Exception as e:
+        print(f"Error borrando imágenes de Cloudinary al eliminar producto: {e}")
     
     # Hard delete: eliminar físicamente el producto
     db.delete(product)

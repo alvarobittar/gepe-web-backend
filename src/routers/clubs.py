@@ -205,7 +205,18 @@ def update_club(club_id: int, payload: ClubUpdate, db: Session = Depends(get_db)
 
     # Actualizar escudo si se envía (puede ser None explícito para limpiar)
     if "crest_image_url" in data:
-        club.crest_image_url = data["crest_image_url"]
+        new_url = data["crest_image_url"]
+        old_url = club.crest_image_url
+        
+        # Si cambia la imagen, intentar borrar la anterior de Cloudinary
+        if old_url and old_url != new_url:
+            try:
+                from ..services.cloudinary_service import delete_image_from_url
+                delete_image_from_url(old_url)
+            except Exception as e:
+                print(f"Error borrando escudo antiguo de Cloudinary: {e}")
+                
+        club.crest_image_url = new_url
 
     # Actualizar display_name si se envía
     if "display_name" in data:
@@ -228,10 +239,19 @@ def delete_club(club_id: int, db: Session = Depends(get_db)):
     """
     Eliminar un club.
     No elimina productos asociados; solo remueve el registro del club.
+    También elimina el escudo de Cloudinary si existe.
     """
     club = db.query(Club).filter(Club.id == club_id).first()
     if not club:
         raise HTTPException(status_code=404, detail="Club no encontrado")
+
+    # Eliminar escudo de Cloudinary
+    if club.crest_image_url:
+        try:
+            from ..services.cloudinary_service import delete_image_from_url
+            delete_image_from_url(club.crest_image_url)
+        except Exception as e:
+            print(f"Error borrando escudo de Cloudinary al eliminar club: {e}")
 
     db.delete(club)
     db.commit()
