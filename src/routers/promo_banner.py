@@ -1,6 +1,8 @@
 from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import JSONResponse
+from fastapi.encoders import jsonable_encoder
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 
@@ -107,13 +109,25 @@ def _list_active_promo_banners_impl(db: Session):
     return banners
 
 
+def _cached_json(data):
+    """
+    Respuesta con caché de 5 minutos para reducir hits y ruido de logs.
+    """
+    return JSONResponse(
+        content=jsonable_encoder(data),
+        headers={
+            "Cache-Control": "public, max-age=300, s-maxage=300, stale-while-revalidate=60",
+        },
+    )
+
+
 @router.get("", response_model=List[PromoBannerOut])
 def list_active_promo_banners_no_slash(db: Session = Depends(get_db)):
     """
     Endpoint público para obtener los mensajes activos del TopPromoBar,
     ordenados por display_order e id.
     """
-    return _list_active_promo_banners_impl(db)
+    return _cached_json(_list_active_promo_banners_impl(db))
 
 
 @router.get("/", response_model=List[PromoBannerOut])
@@ -122,7 +136,7 @@ def list_active_promo_banners(db: Session = Depends(get_db)):
     Endpoint público para obtener los mensajes activos del TopPromoBar,
     ordenados por display_order e id.
     """
-    return _list_active_promo_banners_impl(db)
+    return _cached_json(_list_active_promo_banners_impl(db))
 
 
 @router.get("/admin", response_model=List[PromoBannerOut])
