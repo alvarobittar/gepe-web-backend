@@ -3,7 +3,7 @@ from pydantic import BaseModel
 
 
 class HeroMediaBase(BaseModel):
-    title: str
+    title: str | None = None
     subtitle: str | None = None
     highlight: str | None = None
     image_url: str
@@ -12,6 +12,7 @@ class HeroMediaBase(BaseModel):
     image_focus_y: int = 50
     is_active: bool = True
     display_order: int = 0
+    show_overlay: bool = True  # Control darkening effect
 
 
 class HeroMediaCreate(HeroMediaBase):
@@ -28,6 +29,7 @@ class HeroMediaUpdate(BaseModel):
     image_focus_y: int | None = None
     is_active: bool | None = None
     display_order: int | None = None
+    show_overlay: bool | None = None
 
 
 class HeroMediaOut(HeroMediaBase):
@@ -37,4 +39,3 @@ class HeroMediaOut(HeroMediaBase):
 
     class Config:
         from_attributes = True
-
