@@ -43,6 +43,9 @@ class OrderUpdate(BaseModel):
     shipping_address: Optional[str] = None
     shipping_city: Optional[str] = None
     tracking_code: Optional[str] = None
+    tracking_company: Optional[str] = None  # Empresa de envío
+    tracking_branch_address: Optional[str] = None  # Dirección de sucursal
+    tracking_attachment_url: Optional[str] = None  # Link al comprobante/imagen
 
 
 class ProductionStatusUpdate(BaseModel):
@@ -66,6 +69,9 @@ class OrderOut(BaseModel):
     shipping_address: Optional[str]
     shipping_city: Optional[str]
     tracking_code: Optional[str]  # Código de seguimiento
+    tracking_company: Optional[str] = None  # Empresa de envío
+    tracking_branch_address: Optional[str] = None  # Dirección de sucursal
+    tracking_attachment_url: Optional[str] = None  # Link a comprobante
     production_status: Optional[str]  # Estado de producción
     created_at: datetime
     updated_at: datetime
@@ -91,6 +97,9 @@ class OrderListOut(BaseModel):
     shipping_address: Optional[str] = None  # Dirección de envío
     shipping_city: Optional[str] = None  # Ciudad de envío
     tracking_code: Optional[str] = None  # Código de seguimiento
+    tracking_company: Optional[str] = None  # Empresa de envío
+    tracking_branch_address: Optional[str] = None  # Dirección de sucursal
+    tracking_attachment_url: Optional[str] = None  # Link a comprobante
     production_status: Optional[str] = None  # Estado de producción
 
     class Config:

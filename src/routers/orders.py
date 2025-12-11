@@ -226,6 +226,9 @@ def _list_orders_impl(
             "shipping_address": order.shipping_address,
             "shipping_city": order.shipping_city,
             "tracking_code": order.tracking_code,
+            "tracking_company": order.tracking_company,
+            "tracking_branch_address": order.tracking_branch_address,
+            "tracking_attachment_url": order.tracking_attachment_url,
             "production_status": order.production_status
         }
         result.append(OrderListOut(**order_dict))
@@ -308,6 +311,9 @@ async def list_user_orders(
                 "shipping_address": order.shipping_address,
                 "shipping_city": order.shipping_city,
                 "tracking_code": order.tracking_code,
+            "tracking_company": order.tracking_company,
+            "tracking_branch_address": order.tracking_branch_address,
+            "tracking_attachment_url": order.tracking_attachment_url,
                 "production_status": order.production_status
             }
             result.append(OrderListOut(**order_dict))
@@ -579,6 +585,18 @@ async def update_order(
     if order_update.tracking_code is not None:
         order.tracking_code = order_update.tracking_code
         logger.info(f"Orden {order_id}: código de seguimiento actualizado: {order_update.tracking_code}")
+
+    if order_update.tracking_company is not None:
+        order.tracking_company = order_update.tracking_company
+        logger.info(f"Orden {order_id}: empresa de envío actualizada: {order_update.tracking_company}")
+
+    if order_update.tracking_branch_address is not None:
+        order.tracking_branch_address = order_update.tracking_branch_address
+        logger.info(f"Orden {order_id}: sucursal de envío actualizada: {order_update.tracking_branch_address}")
+
+    if order_update.tracking_attachment_url is not None:
+        order.tracking_attachment_url = order_update.tracking_attachment_url
+        logger.info(f"Orden {order_id}: adjunto de seguimiento actualizado")
     
     if order_update.production_status is not None:
         order.production_status = order_update.production_status

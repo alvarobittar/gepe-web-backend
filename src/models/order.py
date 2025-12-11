@@ -38,6 +38,9 @@ class Order(Base):
     shipping_address = Column(String(500), nullable=True)
     shipping_city = Column(String(100), nullable=True)
     tracking_code = Column(String(100), nullable=True)  # Código de seguimiento (Andreani/Correo Arg)
+    tracking_company = Column(String(150), nullable=True)  # Empresa de envío (Andreani, Correo Argentino, etc.)
+    tracking_branch_address = Column(String(300), nullable=True)  # Sucursal o dirección de retiro/consulta
+    tracking_attachment_url = Column(String(500), nullable=True)  # Link a comprobante/archivo de envío
     
     # Timestamps
     created_at = Column(DateTime, default=datetime.utcnow)
