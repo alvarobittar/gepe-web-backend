@@ -140,6 +140,9 @@ def create_hero_media(payload: HeroMediaCreate, db: Session = Depends(get_db)):
         is_active=payload.is_active,
         display_order=payload.display_order,
         show_overlay=payload.show_overlay,
+        aspect_ratio_desktop=payload.aspect_ratio_desktop,
+        aspect_ratio_mobile=payload.aspect_ratio_mobile,
+        link_url=payload.link_url,
     )
     db.add(hero)
     db.commit()
@@ -157,7 +160,7 @@ def update_hero_media(
 
     data = payload.model_dump(exclude_unset=True)
     # Fields that can be set to empty string (for SQLite NOT NULL compatibility)
-    nullable_fields = {"title", "subtitle", "highlight", "video_url"}
+    nullable_fields = {"title", "subtitle", "highlight", "video_url", "link_url"}
     
     for key, value in data.items():
         if key in nullable_fields:

@@ -16,6 +16,7 @@ class HeroMediaBase(BaseModel):
     show_overlay: bool = True  # Control darkening effect
     aspect_ratio_desktop: str = "16:6"  # Aspect ratio for desktop view
     aspect_ratio_mobile: str = "4:3"  # Aspect ratio for mobile view
+    link_url: str | None = None  # URL to redirect when hero is clicked
 
 
 class HeroMediaCreate(HeroMediaBase):
@@ -36,6 +37,7 @@ class HeroMediaUpdate(BaseModel):
     show_overlay: bool | None = None
     aspect_ratio_desktop: str | None = None
     aspect_ratio_mobile: str | None = None
+    link_url: str | None = None
 
 
 class HeroMediaOut(HeroMediaBase):

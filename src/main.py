@@ -271,6 +271,7 @@ def create_tables():
                     "show_overlay": "BOOLEAN DEFAULT TRUE",
                     "aspect_ratio_desktop": "VARCHAR(10) DEFAULT '16:6'",
                     "aspect_ratio_mobile": "VARCHAR(10) DEFAULT '4:3'",
+                    "link_url": "VARCHAR(500)",
                 }
 
                 with engine.connect() as conn:
