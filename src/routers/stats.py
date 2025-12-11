@@ -303,11 +303,26 @@ def get_dashboard_stats(db: Session = Depends(get_db)):
         categories_count = db.query(func.count(Category.id)).scalar() or 0
         promo_banners_count = db.query(func.count(PromoBanner.id)).scalar() or 0
         
-        # --- Ingresos totales (contar todo excepto pendientes o cancelados) ---
+        # --- Ingresos totales (solo órdenes confirmadas/pagadas) ---
+        # Estados válidos: PAID, IN_PRODUCTION, READY_FOR_SHIPMENT, SHIPPED, DELIVERED
+        # Excluir: PENDING (no pagado), CANCELLED (cancelado), REFUNDED (reembolsado)
+        VALID_REVENUE_STATUSES = ["PAID", "IN_PRODUCTION", "READY_FOR_SHIPMENT", "SHIPPED", "DELIVERED"]
         try:
+            # Debug: log all orders with their status and amounts
+            all_orders = db.query(Order.id, Order.status, Order.total_amount).all()
+            logger.info(f"DEBUG - All orders: {[(o.id, o.status, o.total_amount) for o in all_orders]}")
+            
+            # Calculate total revenue
             total_revenue = db.query(func.sum(Order.total_amount)).filter(
-                ~Order.status.in_(["PENDING", "CANCELLED"])
+                Order.status.in_(VALID_REVENUE_STATUSES)
             ).scalar() or 0.0
+            
+            # Debug: log matching orders
+            matching_orders = db.query(Order.id, Order.status, Order.total_amount).filter(
+                Order.status.in_(VALID_REVENUE_STATUSES)
+            ).all()
+            logger.info(f"DEBUG - Matching orders for revenue: {[(o.id, o.status, o.total_amount) for o in matching_orders]}")
+            logger.info(f"DEBUG - Total revenue calculated: {total_revenue}")
         except Exception as e:
             logger.warning(f"Error al calcular ingresos: {e}")
             total_revenue = 0.0
@@ -387,7 +402,7 @@ def get_dashboard_stats(db: Session = Depends(get_db)):
                 
                 online_quantity = item.online_quantity or 0
                 total_quantity = online_quantity + manual_adjustment
-                total_revenue = float(item.total_revenue) if item.total_revenue else 0.0
+                product_revenue = float(item.total_revenue) if item.total_revenue else 0.0
                 
                 key = item.product_id or item.product_name
                 product_sales_dict[key] = {
@@ -396,7 +411,7 @@ def get_dashboard_stats(db: Session = Depends(get_db)):
                     "total_quantity": total_quantity,
                     "stock": stock,
                     "price": price,
-                    "total_revenue": total_revenue,
+                    "total_revenue": product_revenue,
                     "slug": slug
                 }
             
@@ -477,7 +492,7 @@ def get_dashboard_stats(db: Session = Depends(get_db)):
                 next_day = day + timedelta(days=1)
                 
                 daily_revenue = db.query(func.sum(Order.total_amount)).filter(
-                    ~Order.status.in_(["PENDING", "CANCELLED"]),
+                    Order.status.in_(VALID_REVENUE_STATUSES),
                     Order.created_at >= day,
                     Order.created_at < next_day
                 ).scalar() or 0.0
@@ -498,10 +513,12 @@ def get_dashboard_stats(db: Session = Depends(get_db)):
                 ))
 
         # --- Breakdown de estados de pedido (para donut) ---
-        # Reglas pedidas: Pendiente, Listo para enviar, Enviado, Cancelado
+        # 6 categorías detalladas
         order_status_counts = {
             "pending": 0,
-            "ready_to_ship": 0,
+            "paid": 0,
+            "in_production": 0,
+            "ready_for_shipment": 0,
             "shipped": 0,
             "cancelled": 0,
         }
@@ -515,8 +532,12 @@ def get_dashboard_stats(db: Session = Depends(get_db)):
                 val = count or 0
                 if status == "PENDING":
                     order_status_counts["pending"] += val
-                elif status in ["PAID", "IN_PRODUCTION"]:
-                    order_status_counts["ready_to_ship"] += val
+                elif status == "PAID":
+                    order_status_counts["paid"] += val
+                elif status == "IN_PRODUCTION":
+                    order_status_counts["in_production"] += val
+                elif status == "READY_FOR_SHIPMENT":
+                    order_status_counts["ready_for_shipment"] += val
                 elif status in ["SHIPPED", "DELIVERED"]:
                     order_status_counts["shipped"] += val
                 elif status in ["CANCELLED", "REFUNDED"]:
@@ -542,8 +563,8 @@ def get_dashboard_stats(db: Session = Depends(get_db)):
                     .filter(
                         Order.created_at >= start,
                         Order.created_at < end,
-                        # Lógica: contar todo excepto PENDING (aún no se suma) y CANCELLED (se descuenta)
-                        ~Order.status.in_(["PENDING", "CANCELLED"]),
+                        # Usar los mismos estados válidos para consistencia
+                        Order.status.in_(VALID_REVENUE_STATUSES),
                     )
                     .scalar()
                     or 0
