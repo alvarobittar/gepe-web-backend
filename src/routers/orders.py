@@ -117,7 +117,8 @@ async def create_order(
             customer_dni=order_input.customer_dni,
             shipping_method=order_input.shipping_method,
             shipping_address=order_input.shipping_address,
-            shipping_city=order_input.shipping_city
+            shipping_city=order_input.shipping_city,
+            shipping_province=order_input.shipping_province
         )
         
         db.add(order)
@@ -225,6 +226,7 @@ def _list_orders_impl(
             "shipping_method": order.shipping_method,
             "shipping_address": order.shipping_address,
             "shipping_city": order.shipping_city,
+            "shipping_province": order.shipping_province,
             "tracking_code": order.tracking_code,
             "tracking_company": order.tracking_company,
             "tracking_branch_address": order.tracking_branch_address,
@@ -310,6 +312,7 @@ async def list_user_orders(
                 "shipping_method": order.shipping_method,
                 "shipping_address": order.shipping_address,
                 "shipping_city": order.shipping_city,
+            "shipping_province": order.shipping_province,
                 "tracking_code": order.tracking_code,
             "tracking_company": order.tracking_company,
             "tracking_branch_address": order.tracking_branch_address,

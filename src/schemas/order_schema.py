@@ -31,6 +31,7 @@ class OrderCreate(BaseModel):
     shipping_method: Optional[str] = None
     shipping_address: Optional[str] = None
     shipping_city: Optional[str] = None
+    shipping_province: Optional[str] = None
     external_reference: Optional[str] = None
     payment_id: Optional[str] = None
     items: List[OrderItemCreate]
@@ -42,6 +43,7 @@ class OrderUpdate(BaseModel):
     payment_id: Optional[str] = None
     shipping_address: Optional[str] = None
     shipping_city: Optional[str] = None
+    shipping_province: Optional[str] = None
     tracking_code: Optional[str] = None
     tracking_company: Optional[str] = None  # Empresa de envío
     tracking_branch_address: Optional[str] = None  # Dirección de sucursal
@@ -68,6 +70,7 @@ class OrderOut(BaseModel):
     shipping_method: Optional[str]
     shipping_address: Optional[str]
     shipping_city: Optional[str]
+    shipping_province: Optional[str]
     tracking_code: Optional[str]  # Código de seguimiento
     tracking_company: Optional[str] = None  # Empresa de envío
     tracking_branch_address: Optional[str] = None  # Dirección de sucursal
@@ -96,6 +99,7 @@ class OrderListOut(BaseModel):
     shipping_method: Optional[str] = None  # Método de envío
     shipping_address: Optional[str] = None  # Dirección de envío
     shipping_city: Optional[str] = None  # Ciudad de envío
+    shipping_province: Optional[str] = None  # Provincia de envío
     tracking_code: Optional[str] = None  # Código de seguimiento
     tracking_company: Optional[str] = None  # Empresa de envío
     tracking_branch_address: Optional[str] = None  # Dirección de sucursal

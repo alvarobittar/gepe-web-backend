@@ -128,6 +128,7 @@ def create_tables():
                     "shipping_method": "VARCHAR(50)",
                     "shipping_address": "VARCHAR(500)",
                     "shipping_city": "VARCHAR(100)",
+                    "shipping_province": "VARCHAR(120)",
                     "tracking_code": "VARCHAR(100)",
                     "tracking_company": "VARCHAR(150)",
                     "tracking_branch_address": "VARCHAR(300)",
