@@ -4,19 +4,15 @@ __pycache__/
 *.pyd
 .Python
 
-# Entorno virtual
 .venv/
 venv/
 ENV/
 env/
 
-# Variables de entorno (NO subir credenciales)
 .env
 .env.local
 .env.*.local
 
-# Base de datos local SQLite (usada en desarrollo local para ahorrar créditos Railway)
-# NOTA: gepe.db está excluido para que cada desarrollador tenga su propia BD local
 *.db
 *.sqlite
 *.sqlite3
@@ -24,34 +20,27 @@ gepe.db
 *.db.backup
 *.db-*
 
-# Scripts manuales de migración (ahora usamos Alembic)
 add_*.py
 update_*.py
 
-# Scripts de test y desarrollo temporal
 test_db_connection.py
 create_tables.py
 fix_database_url.py
 setup-venv.bat
 run-backend.bat
 
-# Testing
 .pytest_cache/
 .coverage
 htmlcov/
 .tox/
 
-# NOTA: run-dev.bat NO está en .gitignore porque Railway lo necesita
-
-# Distribución
 dist/
 build/
 *.egg-info/
+cleanup_cloudinary.py
 
-# Node modules (si hubiera alguno)
 node_modules/
 
-# IDEs
 .vscode/
 .idea/
 *.swp

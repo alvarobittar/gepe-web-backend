@@ -205,12 +205,14 @@ def create_tables():
                     required_cart_columns = {
                         "calidad": "TEXT",
                         "talle": "TEXT",
+                        "created_at": "DATETIME",  # Para limpieza de carritos viejos
                     }
                 else:
                     # PostgreSQL y otras bases de datos
                     required_cart_columns = {
                         "calidad": "VARCHAR(50)",
                         "talle": "VARCHAR(20)",
+                        "created_at": "TIMESTAMP DEFAULT CURRENT_TIMESTAMP",
                     }
                 
                 with engine.connect() as conn:
