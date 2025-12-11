@@ -123,20 +123,23 @@ def list_hero_media_admin(db: Session = Depends(get_db)):
 
 @router.post("/admin", response_model=HeroMediaOut, status_code=201)
 def create_hero_media(payload: HeroMediaCreate, db: Session = Depends(get_db)):
-    if not payload.title or not payload.image_url:
-        raise HTTPException(status_code=400, detail="title e image_url son requeridos")
+    # Only image_url is required now, title is optional
+    if not payload.image_url:
+        raise HTTPException(status_code=400, detail="image_url es requerido")
 
     _reset_hero_media_sequence(db)
     hero = HeroMedia(
-        title=payload.title,
+        title=payload.title or "",  # Empty string if None (SQLite constraint)
         subtitle=payload.subtitle,
         highlight=payload.highlight,
         image_url=payload.image_url,
         video_url=payload.video_url,
         image_focus_x=payload.image_focus_x,
         image_focus_y=payload.image_focus_y,
+        image_zoom=payload.image_zoom,
         is_active=payload.is_active,
         display_order=payload.display_order,
+        show_overlay=payload.show_overlay,
     )
     db.add(hero)
     db.commit()
@@ -153,8 +156,16 @@ def update_hero_media(
         raise HTTPException(status_code=404, detail="HeroMedia no encontrado")
 
     data = payload.model_dump(exclude_unset=True)
+    # Fields that can be set to empty string (for SQLite NOT NULL compatibility)
+    nullable_fields = {"title", "subtitle", "highlight", "video_url"}
+    
     for key, value in data.items():
-        if value is not None:
+        if key in nullable_fields:
+            # Convert None to empty string for title (SQLite constraint)
+            if key == "title" and value is None:
+                value = ""
+            setattr(hero, key, value)
+        elif value is not None:
             setattr(hero, key, value)
 
     db.add(hero)

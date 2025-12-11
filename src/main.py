@@ -258,7 +258,7 @@ def create_tables():
         except Exception as e:
             logger.warning(f"⚠️ Error durante migración de products: {e}")
 
-        # Migrar columnas faltantes en hero_media (focus point) si es necesario
+        # Migrar columnas faltantes en hero_media (focus point, show_overlay) si es necesario
         try:
             inspector = inspect(engine)
             if "hero_media" in inspector.get_table_names():
@@ -267,12 +267,20 @@ def create_tables():
                 required_hero_columns = {
                     "image_focus_x": "INTEGER DEFAULT 50",
                     "image_focus_y": "INTEGER DEFAULT 50",
+                    "image_zoom": "INTEGER DEFAULT 100",
+                    "show_overlay": "BOOLEAN DEFAULT TRUE",
+                    "aspect_ratio_desktop": "VARCHAR(10) DEFAULT '16:6'",
+                    "aspect_ratio_mobile": "VARCHAR(10) DEFAULT '4:3'",
                 }
 
                 with engine.connect() as conn:
                     for col_name, col_type in required_hero_columns.items():
                         if col_name not in hero_media_columns:
                             try:
+                                # SQLite usa INTEGER para BOOLEAN
+                                db_url = str(engine.url)
+                                if db_url.startswith("sqlite") and col_type.startswith("BOOLEAN"):
+                                    col_type = "INTEGER DEFAULT 1"
                                 conn.execute(text(f"ALTER TABLE hero_media ADD COLUMN {col_name} {col_type}"))
                                 conn.commit()
                                 logger.info(f"✅ Columna agregada a hero_media: {col_name}")
