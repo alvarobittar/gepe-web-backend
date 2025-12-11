@@ -303,10 +303,10 @@ def get_dashboard_stats(db: Session = Depends(get_db)):
         categories_count = db.query(func.count(Category.id)).scalar() or 0
         promo_banners_count = db.query(func.count(PromoBanner.id)).scalar() or 0
         
-        # --- Ingresos totales (solo pedidos PAID) ---
+        # --- Ingresos totales (contar todo excepto pendientes o cancelados) ---
         try:
             total_revenue = db.query(func.sum(Order.total_amount)).filter(
-                Order.status == "PAID"
+                ~Order.status.in_(["PENDING", "CANCELLED"])
             ).scalar() or 0.0
         except Exception as e:
             logger.warning(f"Error al calcular ingresos: {e}")
@@ -477,7 +477,7 @@ def get_dashboard_stats(db: Session = Depends(get_db)):
                 next_day = day + timedelta(days=1)
                 
                 daily_revenue = db.query(func.sum(Order.total_amount)).filter(
-                    Order.status == "PAID",
+                    ~Order.status.in_(["PENDING", "CANCELLED"]),
                     Order.created_at >= day,
                     Order.created_at < next_day
                 ).scalar() or 0.0
@@ -542,7 +542,8 @@ def get_dashboard_stats(db: Session = Depends(get_db)):
                     .filter(
                         Order.created_at >= start,
                         Order.created_at < end,
-                        Order.status == "PAID",
+                        # Lógica: contar todo excepto PENDING (aún no se suma) y CANCELLED (se descuenta)
+                        ~Order.status.in_(["PENDING", "CANCELLED"]),
                     )
                     .scalar()
                     or 0
