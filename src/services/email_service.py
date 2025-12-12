@@ -136,12 +136,36 @@ async def send_production_complete_email(order) -> bool:
         </html>
         """
         
+        # Versión plain text para mejor deliverability
+        products_text = ""
+        for item in order.items:
+            size_text = f" (Talle: {item.product_size})" if item.product_size else ""
+            products_text += f"  - {item.product_name}{size_text} x{item.quantity}\n"
+        
+        text_content = f"""
+Tu pedido está listo
+
+Hola {order.customer_name or 'Cliente'},
+
+¡Excelentes noticias! Tu pedido {order.order_number} ya está terminado y listo para ser enviado.
+
+Productos en tu pedido:
+{products_text}
+Te enviaremos otro correo con la información de seguimiento cuando tu pedido sea despachado.
+
+¿Tenés alguna pregunta? Respondé a este correo o contactanos por WhatsApp.
+
+---
+GEPE - Indumentaria Deportiva
+        """
+        
         # Enviar email
         params = {
             "from": os.getenv("RESEND_FROM_EMAIL", "GEPE <notificaciones@gepesport.com>"),
             "to": [order.customer_email],
-            "subject": f"🎉 ¡Tu pedido {order.order_number} está listo!",
+            "subject": f"Tu pedido {order.order_number} esta listo!",
             "html": html_content,
+            "text": text_content,
         }
 
         reply_to = _get_default_reply_to()
@@ -228,11 +252,30 @@ async def send_order_shipped_email(order, tracking_code: str = None) -> bool:
         </html>
         """
         
+        # Versión plain text
+        tracking_text = f"\nCódigo de seguimiento: {tracking_code}\n" if tracking_code else ""
+        
+        text_content = f"""
+Tu pedido esta en camino
+
+Hola {order.customer_name or 'Cliente'},
+
+Tu pedido {order.order_number} ya fue despachado y está en camino.
+{tracking_text}
+Podés seguir el estado de tu envío con el código de seguimiento.
+
+¿Tenés alguna pregunta? Respondé a este correo o contactanos por WhatsApp.
+
+---
+GEPE - Indumentaria Deportiva
+        """
+        
         params = {
             "from": os.getenv("RESEND_FROM_EMAIL", "GEPE <notificaciones@gepesport.com>"),
             "to": [order.customer_email],
-            "subject": f"📦 Tu pedido {order.order_number} está en camino",
+            "subject": f"Tu pedido {order.order_number} esta en camino",
             "html": html_content,
+            "text": text_content,
         }
 
         reply_to = _get_default_reply_to()
@@ -678,6 +721,10 @@ async def send_order_confirmation_email(order) -> bool:
                 shipping_info += f'<p style="margin: 5px 0 0 0; color: #047857;"><strong>Provincia:</strong> {order.shipping_province}</p>'
             shipping_info += "</div>"
         
+        # URL del sitio
+        site_url = os.getenv("FRONTEND_URL", "https://gepesport.com")
+        tracking_url = f"{site_url}/pedidos/{order.id}?email={order.customer_email}"
+        
         # HTML del email
         html_content = f"""
         <!DOCTYPE html>
@@ -694,7 +741,7 @@ async def send_order_confirmation_email(order) -> bool:
             <div style="background: #ffffff; padding: 30px; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 12px 12px;">
                 <p style="font-size: 16px;">Hola <strong>{order.customer_name or 'Cliente'}</strong>,</p>
                 
-                <p>¡Tu pago fue confirmado exitosamente! Ya comenzamos a preparar tu pedido.</p>
+                <p>¡Gracias por elegirnos! Tu pago fue confirmado exitosamente y ya comenzamos a preparar tu pedido.</p>
                 
                 <div style="background: #ecfdf5; border: 1px solid #10b981; border-radius: 8px; padding: 15px; margin: 20px 0; text-align: center;">
                     <p style="margin: 0; font-size: 14px; color: #065f46;">Número de pedido</p>
@@ -724,6 +771,13 @@ async def send_order_confirmation_email(order) -> bool:
                 
                 {shipping_info}
                 
+                <!-- Botón de seguimiento -->
+                <div style="text-align: center; margin: 25px 0;">
+                    <a href="{tracking_url}" style="display: inline-block; background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; text-decoration: none; padding: 14px 28px; border-radius: 8px; font-weight: bold; font-size: 16px;">
+                        📦 Ver estado de mi pedido
+                    </a>
+                </div>
+                
                 <div style="margin-top: 20px; padding: 15px; background: #fef3c7; border: 1px solid #f59e0b; border-radius: 8px;">
                     <h4 style="margin: 0 0 8px 0; color: #92400e;">⏱️ ¿Qué sigue?</h4>
                     <p style="margin: 0; font-size: 14px; color: #92400e;">
@@ -745,12 +799,53 @@ async def send_order_confirmation_email(order) -> bool:
         </html>
         """
         
+        # Versión plain text
+        products_text = ""
+        for item in order.items:
+            size_text = f" (Talle: {item.product_size})" if item.product_size else ""
+            price_formatted = f"${item.unit_price:,.0f}".replace(",", ".")
+            products_text += f"  - {item.product_name}{size_text} x{item.quantity} - {price_formatted}\n"
+        
+        shipping_text = ""
+        if order.shipping_method:
+            shipping_method_text = "Envío a domicilio" if order.shipping_method == "domicilio" else "Retiro en local"
+            shipping_text = f"\nMétodo de envío: {shipping_method_text}"
+            if order.shipping_address:
+                shipping_text += f"\nDirección: {order.shipping_address}"
+            if order.shipping_city:
+                shipping_text += f"\nCiudad: {order.shipping_city}"
+        
+        text_content = f"""
+Gracias por tu compra!
+
+Hola {order.customer_name or 'Cliente'},
+
+¡Gracias por elegirnos! Tu pago fue confirmado exitosamente y ya comenzamos a preparar tu pedido.
+
+Número de pedido: {order.order_number}
+
+Resumen de tu compra:
+{products_text}
+TOTAL: {total_formatted}
+{shipping_text}
+
+Ver estado de tu pedido: {tracking_url}
+
+Tu pedido será confeccionado a medida. Te avisaremos por email cuando esté listo para ser enviado.
+
+¿Tenés alguna pregunta? Respondé a este correo o contactanos por WhatsApp.
+
+---
+GEPE - Indumentaria Deportiva
+        """
+        
         # Enviar email
         params = {
             "from": os.getenv("RESEND_FROM_EMAIL", "GEPE <notificaciones@gepesport.com>"),
             "to": [order.customer_email],
-            "subject": f"✅ Confirmación de compra - Pedido {order.order_number}",
+            "subject": f"Confirmacion de compra - Pedido {order.order_number}",
             "html": html_content,
+            "text": text_content,
         }
 
         reply_to = _get_default_reply_to()
@@ -759,7 +854,7 @@ async def send_order_confirmation_email(order) -> bool:
         
         response = resend.Emails.send(params)
         
-        logger.info(f"✅ Email de confirmación enviado a {order.customer_email}. Orden: {order.order_number}, ID: {response.get('id', 'N/A')}")
+        logger.info(f"Email de confirmación enviado a {order.customer_email}. Orden: {order.order_number}, ID: {response.get('id', 'N/A')}")
         return True
         
     except Exception as e:
