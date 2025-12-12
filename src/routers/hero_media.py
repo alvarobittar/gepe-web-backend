@@ -68,7 +68,7 @@ def _ensure_default_hero_media(db: Session) -> None:
             subtitle="SOMOS PARTE DEL EQUIPO",
             highlight="VIVIMOS",
             image_url="/hero-banner-hd.jpg",
-            video_url="https://phosphor.utils.elfsightcdn.com/?url=https%3A%2F%2Fscontent-vie1-1.cdninstagram.com%2Fo1%2Fv%2Ft2%2Ff2%2Fm86%2FAQO_BsxEcyHfGkXIqikIJ3Z3oBYUFPPDHpvFd6Dcv2cJVjzS0_LbdYWnXEJW3t7S1rO6fp1oWDHL0WVNu8cy7yK3DuL5lQrqKghye3Q.mp4%3F_nc_cat%3D108%26_nc_sid%3D5e9851%26_nc_ht%3Dscontent-vie1-1.cdninstagram.com%26_nc_ohc%3DxvArGNHEjbUQ7kNvwEm-myL%26efg%3DeyJ2ZW5jb2RlX3RhZyI6Inhwdl9wcm9ncmVzc2l2ZS5JTlNUQUdSQU0uQ0xJUFMuQzMuNzIwLmRhc2hfYmFzZWxpbmVfMV92MSIsInhwdl9hc3NldF9pZCI6MTkwMTI4ODM2NzQ2MjMwNywiYXNzZXRfYWdlX2RheXMiOjAsInZpX3VzZWNhc2VfaWQiOjEwMDk5LCJkdXJhdGlvbl9zIjoxOSwidXJsZ2VuX3NvdXJjZSI6Ind3dyJ9%26ccb%3D17-1%26vs%3D7c5fa4cfb01b5afa%26_nc_vs%3DHBksFQIYUmlnX3hwdl9yZWVsc19wZXJtYW5lbnRfc3JfcHJvZC8zRTQyMjA2M0NGRTMyODE1OUUyMTZENUI3NDQ3MzNBRl92aWRlb19kYXNoaW5pdC5tcDQVAALIARIAFQIYOnBhc3N0aHJvdWdoX2V2ZXJzdG9yZS9HTmIzcXlKWTRrS2NnTEFGQUVsazNkT2YxWFIxYnN0VEFRQUYVAgLIARIAKAAYABsCiAd1c2Vfb2lsATEScHJvZ3Jlc3NpdmVfcmVjaXBlATEVAAAmxt6QnMbN4AYVAigCQzMsF0AzKn752yLRGBJkYXNoX2Jhc2VsaW5lXzFfdjERAHX-B2XmnQEA%26_nc_gid%3DJYOeBzj3Omf9F5tXLS4E2Q%26_nc_zt%3D28%26oh%3D00_AfjsWyMlEL0bGsSTz5Se5EcdL-8HgpFnkT4C39TG3bPLsg%26oe%3D691B1805",
+            video_url=None,  # Sin video de ejemplo
             display_order=1,
             is_active=True,
         ),
