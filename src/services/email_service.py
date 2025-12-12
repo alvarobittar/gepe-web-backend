@@ -130,7 +130,7 @@ async def send_production_complete_email(order) -> bool:
             </div>
             
             <p style="text-align: center; font-size: 12px; color: #9ca3af; margin-top: 20px;">
-                © 2024 GEPE - Indumentaria Deportiva
+                © 2025 GEPE Sport - Indumentaria deportiva
             </p>
         </body>
         </html>
@@ -156,7 +156,7 @@ Te enviaremos otro correo con la información de seguimiento cuando tu pedido se
 ¿Tenés alguna pregunta? Respondé a este correo o contactanos por WhatsApp.
 
 ---
-GEPE - Indumentaria Deportiva
+GEPE Sport - Indumentaria deportiva
         """
         
         # Enviar email
@@ -264,7 +264,7 @@ async def send_order_shipped_email(order, tracking_code: str = None) -> bool:
             </div>
             
             <p style="text-align: center; font-size: 12px; color: #9ca3af; margin-top: 20px;">
-                © 2024 GEPE - Indumentaria Deportiva
+                © 2025 GEPE Sport - Indumentaria deportiva
             </p>
         </body>
         </html>
@@ -295,7 +295,7 @@ Podés seguir el estado de tu envío con el código de seguimiento.
 ¿Tenés alguna pregunta? Respondé a este correo o contactanos por WhatsApp.
 
 ---
-GEPE - Indumentaria Deportiva
+GEPE Sport - Indumentaria deportiva
         """
         
         params = {
@@ -378,7 +378,7 @@ async def send_test_email(email: str) -> bool:
             </div>
             
             <p style="text-align: center; font-size: 12px; color: #9ca3af; margin-top: 20px;">
-                © 2025 GEPE - Indumentaria Deportiva
+                © 2025 GEPE Sport - Indumentaria deportiva
             </p>
         </body>
         </html>
@@ -603,7 +603,7 @@ async def send_sale_notification_email(order, admin_emails: List[str]) -> bool:
             </div>
             
             <p style="text-align: center; font-size: 12px; color: #9ca3af; margin-top: 20px;">
-                © 2024 GEPE - Indumentaria Deportiva
+                © 2025 GEPE Sport - Indumentaria deportiva
             </p>
         </body>
         </html>
@@ -821,7 +821,7 @@ async def send_order_confirmation_email(order) -> bool:
             </div>
             
             <p style="text-align: center; font-size: 12px; color: #9ca3af; margin-top: 20px;">
-                © 2024 GEPE - Indumentaria Deportiva
+                © 2025 GEPE Sport - Indumentaria deportiva
             </p>
         </body>
         </html>
@@ -864,7 +864,7 @@ Tu pedido será confeccionado a medida. Te avisaremos por email cuando esté lis
 ¿Tenés alguna pregunta? Respondé a este correo o contactanos por WhatsApp.
 
 ---
-GEPE - Indumentaria Deportiva
+GEPE Sport - Indumentaria deportiva
         """
         
         # Enviar email
