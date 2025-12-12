@@ -608,6 +608,20 @@ async def update_order(
     try:
         db.commit()
         db.refresh(order)
+        
+        # Enviar email al cliente cuando el pedido es marcado como SHIPPED
+        if order_update.status == "SHIPPED":
+            try:
+                from ..services.email_service import send_order_shipped_email
+                email_sent = await send_order_shipped_email(order, order.tracking_code)
+                if email_sent:
+                    logger.info(f"✅ Email de envío enviado a {order.customer_email}")
+                else:
+                    logger.warning(f"⚠️ No se pudo enviar email de envío a {order.customer_email}")
+            except Exception as email_error:
+                # No bloquear la actualización si falla el email
+                logger.error(f"Error al enviar email de envío: {str(email_error)}")
+        
         return order
     except Exception as e:
         db.rollback()

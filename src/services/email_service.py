@@ -22,6 +22,11 @@ def _get_resend_api_key() -> Optional[str]:
     return os.getenv("RESEND_API_KEY")
 
 
+def _get_default_reply_to() -> Optional[str]:
+    """Reply-To por defecto para correos salientes"""
+    return os.getenv("RESEND_REPLY_TO") or os.getenv("DEFAULT_NOTIFICATION_EMAIL")
+
+
 def _is_email_service_configured() -> bool:
     """Verifica si el servicio de email está configurado correctamente"""
     if not RESEND_AVAILABLE:
@@ -43,7 +48,7 @@ def get_email_config_info() -> dict:
     return {
         "resend_available": RESEND_AVAILABLE,
         "api_key_configured": bool(_get_resend_api_key()),
-        "from_email": os.getenv("RESEND_FROM_EMAIL", "GEPE <notificaciones@gepe.com.ar>"),
+        "from_email": os.getenv("RESEND_FROM_EMAIL", "GEPE <notificaciones@gepesport.com>"),
         "configured": _is_email_service_configured()
     }
 
@@ -133,11 +138,15 @@ async def send_production_complete_email(order) -> bool:
         
         # Enviar email
         params = {
-            "from": os.getenv("RESEND_FROM_EMAIL", "GEPE <notificaciones@gepe.com.ar>"),
+            "from": os.getenv("RESEND_FROM_EMAIL", "GEPE <notificaciones@gepesport.com>"),
             "to": [order.customer_email],
             "subject": f"🎉 ¡Tu pedido {order.order_number} está listo!",
             "html": html_content,
         }
+
+        reply_to = _get_default_reply_to()
+        if reply_to:
+            params["reply_to"] = [reply_to]
         
         response = resend.Emails.send(params)
         
@@ -220,11 +229,15 @@ async def send_order_shipped_email(order, tracking_code: str = None) -> bool:
         """
         
         params = {
-            "from": os.getenv("RESEND_FROM_EMAIL", "GEPE <notificaciones@gepe.com.ar>"),
+            "from": os.getenv("RESEND_FROM_EMAIL", "GEPE <notificaciones@gepesport.com>"),
             "to": [order.customer_email],
             "subject": f"📦 Tu pedido {order.order_number} está en camino",
             "html": html_content,
         }
+
+        reply_to = _get_default_reply_to()
+        if reply_to:
+            params["reply_to"] = [reply_to]
         
         response = resend.Emails.send(params)
         
@@ -294,14 +307,14 @@ async def send_test_email(email: str) -> bool:
             </div>
             
             <p style="text-align: center; font-size: 12px; color: #9ca3af; margin-top: 20px;">
-                © 2024 GEPE - Indumentaria Deportiva
+                © 2025 GEPE - Indumentaria Deportiva
             </p>
         </body>
         </html>
         """
         
         params = {
-            "from": os.getenv("RESEND_FROM_EMAIL", "GEPE <notificaciones@gepe.com.ar>"),
+            "from": os.getenv("RESEND_FROM_EMAIL", "GEPE <notificaciones@gepesport.com>"),
             "to": [email.strip()],
             "subject": "✅ Correo de prueba - Notificaciones GEPE",
             "html": html_content,
@@ -378,7 +391,7 @@ async def send_regret_notification_email(form_data: dict, admin_emails: List[str
         """
 
         params = {
-            "from": os.getenv("RESEND_FROM_EMAIL", "GEPE <notificaciones@gepe.com.ar>"),
+            "from": os.getenv("RESEND_FROM_EMAIL", "GEPE <notificaciones@gepesport.com>"),
             "to": admin_emails,
             "subject": f"🛑 Arrepentimiento de compra - Pedido {numero_pedido}",
             "html": html_content,
@@ -527,7 +540,7 @@ async def send_sale_notification_email(order, admin_emails: List[str]) -> bool:
         
         # Enviar email a todos los administradores
         params = {
-            "from": os.getenv("RESEND_FROM_EMAIL", "GEPE <notificaciones@gepe.com.ar>"),
+            "from": os.getenv("RESEND_FROM_EMAIL", "GEPE <notificaciones@gepesport.com>"),
             "to": admin_emails,
             "subject": f"💰 Nueva Venta: {order.order_number} - {total_formatted}",
             "html": html_content,
@@ -540,4 +553,215 @@ async def send_sale_notification_email(order, admin_emails: List[str]) -> bool:
         
     except Exception as e:
         logger.error(f"Error al enviar notificación de venta: {str(e)}", exc_info=True)
+        return False
+
+
+async def send_contact_email(form_data: dict, admin_emails: List[str]) -> bool:
+    """
+    Envía el mensaje del formulario de Contacto a los correos de admins.
+    Usa el correo del cliente como Reply-To para que puedan responderle directo.
+    """
+    if not _is_email_service_configured():
+        logger.warning("Servicio de email no configurado, no se enviará contacto")
+        return False
+
+    if not admin_emails:
+        logger.warning("No hay emails de administradores configurados para recibir contacto")
+        return False
+
+    try:
+        resend.api_key = _get_resend_api_key()
+
+        nombre = form_data.get("nombre", "").strip() or "Sin nombre"
+        email = form_data.get("email", "").strip()
+        mensaje = form_data.get("mensaje", "").strip()
+
+        html_content = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        </head>
+        <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #1f2937; max-width: 640px; margin: 0 auto; padding: 24px; background: #f9fafb;">
+            <div style="background: #0f172a; color: white; padding: 20px; border-radius: 12px 12px 0 0; text-align: center;">
+                <h1 style="margin: 0; font-size: 20px;">📨 Nuevo mensaje de contacto</h1>
+            </div>
+            <div style="background: white; padding: 24px; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 12px 12px;">
+                <h3 style="margin: 0 0 12px 0; color: #111827;">Datos</h3>
+                <table style="width: 100%; border-collapse: collapse; margin-bottom: 16px;">
+                    <tr><td style="padding: 6px 0; color: #6b7280;">Nombre</td><td style="padding: 6px 0; font-weight: 600;">{nombre}</td></tr>
+                    <tr><td style="padding: 6px 0; color: #6b7280;">Email</td><td style="padding: 6px 0; font-weight: 600;">{email or 'No provisto'}</td></tr>
+                </table>
+                <h3 style="margin: 0 0 8px 0; color: #111827;">Mensaje</h3>
+                <div style="padding: 12px; background: #f3f4f6; border-radius: 8px; color: #374151; white-space: pre-wrap;">{mensaje}</div>
+            </div>
+            <p style="text-align: center; color: #9ca3af; font-size: 12px; margin-top: 12px;">GEPE Contacto</p>
+        </body>
+        </html>
+        """
+
+        params = {
+            "from": os.getenv("RESEND_FROM_EMAIL", "GEPE <notificaciones@gepesport.com>"),
+            "to": admin_emails,
+            "subject": f"📨 Contacto: {nombre}",
+            "html": html_content,
+        }
+
+        if email:
+            params["reply_to"] = [email]
+
+        response = resend.Emails.send(params)
+        logger.info(f"Email de contacto enviado a {len(admin_emails)} admins. ID: {response.get('id', 'N/A')}")
+        return True
+    except Exception as e:
+        logger.error(f"Error al enviar email de contacto: {str(e)}", exc_info=True)
+        return False
+
+
+async def send_order_confirmation_email(order) -> bool:
+    """
+    Envía un email de confirmación de compra al cliente cuando su pago es aprobado.
+    
+    Args:
+        order: Objeto Order con los datos del pedido
+        
+    Returns:
+        bool: True si el email se envió correctamente, False en caso contrario
+    """
+    if not _is_email_service_configured():
+        logger.warning("Servicio de email no configurado, no se enviará confirmación de compra")
+        return False
+    
+    if not order.customer_email:
+        logger.warning(f"Orden {order.id} no tiene email de cliente")
+        return False
+    
+    try:
+        resend.api_key = _get_resend_api_key()
+        
+        # Preparar lista de productos
+        products_html = ""
+        total_items = 0
+        for item in order.items:
+            size_text = f" (Talle: {item.product_size})" if item.product_size else ""
+            price_formatted = f"${item.unit_price:,.0f}".replace(",", ".")
+            subtotal = item.unit_price * item.quantity
+            subtotal_formatted = f"${subtotal:,.0f}".replace(",", ".")
+            products_html += f"""
+            <tr>
+                <td style="padding: 10px; border-bottom: 1px solid #eee;">{item.product_name}{size_text}</td>
+                <td style="padding: 10px; border-bottom: 1px solid #eee; text-align: center;">{item.quantity}</td>
+                <td style="padding: 10px; border-bottom: 1px solid #eee; text-align: right;">{price_formatted}</td>
+                <td style="padding: 10px; border-bottom: 1px solid #eee; text-align: right; font-weight: bold;">{subtotal_formatted}</td>
+            </tr>
+            """
+            total_items += item.quantity
+        
+        # Formatear total
+        total_formatted = f"${order.total_amount:,.0f}".replace(",", ".")
+        
+        # Información de envío
+        shipping_info = ""
+        if order.shipping_method:
+            shipping_method_text = "Envío a domicilio" if order.shipping_method == "domicilio" else "Retiro en local"
+            shipping_info = f"""
+            <div style="margin-top: 20px; padding: 15px; background: #f0fdf4; border: 1px solid #10b981; border-radius: 8px;">
+                <h4 style="margin: 0 0 10px 0; color: #065f46;">📦 Datos de envío</h4>
+                <p style="margin: 0; color: #047857;"><strong>Método:</strong> {shipping_method_text}</p>
+            """
+            if order.shipping_address:
+                shipping_info += f'<p style="margin: 5px 0 0 0; color: #047857;"><strong>Dirección:</strong> {order.shipping_address}</p>'
+            if order.shipping_city:
+                shipping_info += f'<p style="margin: 5px 0 0 0; color: #047857;"><strong>Ciudad:</strong> {order.shipping_city}</p>'
+            if order.shipping_province:
+                shipping_info += f'<p style="margin: 5px 0 0 0; color: #047857;"><strong>Provincia:</strong> {order.shipping_province}</p>'
+            shipping_info += "</div>"
+        
+        # HTML del email
+        html_content = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        </head>
+        <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+            <div style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); padding: 30px; border-radius: 12px 12px 0 0; text-align: center;">
+                <h1 style="color: white; margin: 0; font-size: 24px;">✅ ¡Gracias por tu compra!</h1>
+            </div>
+            
+            <div style="background: #ffffff; padding: 30px; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 12px 12px;">
+                <p style="font-size: 16px;">Hola <strong>{order.customer_name or 'Cliente'}</strong>,</p>
+                
+                <p>¡Tu pago fue confirmado exitosamente! Ya comenzamos a preparar tu pedido.</p>
+                
+                <div style="background: #ecfdf5; border: 1px solid #10b981; border-radius: 8px; padding: 15px; margin: 20px 0; text-align: center;">
+                    <p style="margin: 0; font-size: 14px; color: #065f46;">Número de pedido</p>
+                    <p style="margin: 5px 0 0 0; font-size: 24px; font-weight: bold; color: #10b981;">{order.order_number}</p>
+                </div>
+                
+                <h3 style="color: #374151; border-bottom: 2px solid #e5e7eb; padding-bottom: 10px;">🛒 Resumen de tu compra</h3>
+                <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
+                    <thead>
+                        <tr style="background: #f9fafb;">
+                            <th style="padding: 10px; text-align: left; font-weight: 600; color: #374151;">Producto</th>
+                            <th style="padding: 10px; text-align: center; font-weight: 600; color: #374151;">Cant.</th>
+                            <th style="padding: 10px; text-align: right; font-weight: 600; color: #374151;">Precio</th>
+                            <th style="padding: 10px; text-align: right; font-weight: 600; color: #374151;">Subtotal</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {products_html}
+                    </tbody>
+                    <tfoot>
+                        <tr style="background: #10b981; color: white;">
+                            <td colspan="3" style="padding: 12px; font-weight: bold; font-size: 16px;">TOTAL</td>
+                            <td style="padding: 12px; text-align: right; font-weight: bold; font-size: 18px;">{total_formatted}</td>
+                        </tr>
+                    </tfoot>
+                </table>
+                
+                {shipping_info}
+                
+                <div style="margin-top: 20px; padding: 15px; background: #fef3c7; border: 1px solid #f59e0b; border-radius: 8px;">
+                    <h4 style="margin: 0 0 8px 0; color: #92400e;">⏱️ ¿Qué sigue?</h4>
+                    <p style="margin: 0; font-size: 14px; color: #92400e;">
+                        Tu pedido será confeccionado a medida. Te avisaremos por email cuando esté listo para ser enviado.
+                    </p>
+                </div>
+                
+                <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;">
+                
+                <p style="font-size: 12px; color: #9ca3af; text-align: center;">
+                    ¿Tenés alguna pregunta? Respondé a este correo o contactanos por WhatsApp.
+                </p>
+            </div>
+            
+            <p style="text-align: center; font-size: 12px; color: #9ca3af; margin-top: 20px;">
+                © 2024 GEPE - Indumentaria Deportiva
+            </p>
+        </body>
+        </html>
+        """
+        
+        # Enviar email
+        params = {
+            "from": os.getenv("RESEND_FROM_EMAIL", "GEPE <notificaciones@gepesport.com>"),
+            "to": [order.customer_email],
+            "subject": f"✅ Confirmación de compra - Pedido {order.order_number}",
+            "html": html_content,
+        }
+
+        reply_to = _get_default_reply_to()
+        if reply_to:
+            params["reply_to"] = [reply_to]
+        
+        response = resend.Emails.send(params)
+        
+        logger.info(f"✅ Email de confirmación enviado a {order.customer_email}. Orden: {order.order_number}, ID: {response.get('id', 'N/A')}")
+        return True
+        
+    except Exception as e:
+        logger.error(f"Error al enviar email de confirmación: {str(e)}", exc_info=True)
         return False
