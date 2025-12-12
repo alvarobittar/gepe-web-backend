@@ -96,7 +96,7 @@ async def get_ranking():
 def get_sales_ranking(db: Session = Depends(get_db)):
     """
     Obtiene el ranking de ventas de todos los productos.
-    - Cuenta las unidades vendidas de pedidos PAID
+    - Cuenta las unidades vendidas de pedidos (excluyendo CANCELLED y REFUNDED)
     - Suma el ajuste manual de ventas (ventas de tienda física)
     - Ordena por cantidad vendida total (descendente)
     - Para productos con 0 ventas, ordena alfabéticamente por nombre del club
@@ -106,13 +106,15 @@ def get_sales_ranking(db: Session = Depends(get_db)):
     
     try:
         # Subconsulta para obtener total vendido por producto (ventas online)
+        # Contar todos los pedidos EXCEPTO los cancelados/reembolsados
+        EXCLUDED_STATUSES = ["CANCELLED", "REFUNDED"]
         sales_subquery = (
             db.query(
                 OrderItem.product_id,
                 func.coalesce(func.sum(OrderItem.quantity), 0).label("sold_qty")
             )
             .join(Order, OrderItem.order_id == Order.id)
-            .filter(Order.status == "PAID")
+            .filter(~Order.status.in_(EXCLUDED_STATUSES))
             .group_by(OrderItem.product_id)
             .subquery()
         )
@@ -169,7 +171,7 @@ def get_trending_ranking(
     """
     Obtiene el ranking de productos en **tendencia**.
 
-    - Considera solo las unidades vendidas en pedidos PAID dentro de los últimos `days` días (por defecto 7).
+    - Considera solo las unidades vendidas en pedidos dentro de los últimos `days` días (excluyendo CANCELLED y REFUNDED).
     - Suma el ajuste manual de ventas (ventas de tienda física)
     - Ordena por cantidad vendida total en esa ventana de tiempo (descendente).
     - Devuelve como máximo `limit` productos (por defecto Top 10).
@@ -184,6 +186,8 @@ def get_trending_ranking(
         from_date = now_utc - timedelta(days=days if days > 0 else 7)
 
         # Subconsulta: ventas por producto en la ventana de tiempo (ventas online)
+        # Contar todos los pedidos EXCEPTO los cancelados/reembolsados
+        EXCLUDED_STATUSES = ["CANCELLED", "REFUNDED"]
         weekly_sales_subquery = (
             db.query(
                 OrderItem.product_id,
@@ -191,7 +195,7 @@ def get_trending_ranking(
             )
             .join(Order, OrderItem.order_id == Order.id)
             .filter(
-                Order.status == "PAID",
+                ~Order.status.in_(EXCLUDED_STATUSES),
                 Order.created_at >= from_date,
             )
             .group_by(OrderItem.product_id)
@@ -360,7 +364,8 @@ def get_dashboard_stats(db: Session = Depends(get_db)):
             except Exception:
                 new_customers = 0
         
-        # --- Top productos vendidos (basado en OrderItems de pedidos PAID + ajuste manual) ---
+        # --- Top productos vendidos (basado en OrderItems - excluyendo cancelados/reembolsados + ajuste manual) ---
+        EXCLUDED_STATUSES_SALES = ["CANCELLED", "REFUNDED"]
         top_products = []
         try:
             # Primero obtener ventas online por producto
@@ -372,7 +377,7 @@ def get_dashboard_stats(db: Session = Depends(get_db)):
                     func.sum(OrderItem.unit_price * OrderItem.quantity).label("total_revenue")
                 )
                 .join(Order, OrderItem.order_id == Order.id)
-                .filter(Order.status == "PAID")
+                .filter(~Order.status.in_(EXCLUDED_STATUSES_SALES))
                 .group_by(OrderItem.product_name, OrderItem.product_id)
                 .all()
             )

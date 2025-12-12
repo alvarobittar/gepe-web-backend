@@ -459,11 +459,11 @@ async def list_production_orders(
     - finished: Terminado
     """
     try:
-        # Obtener pedidos en producción (pagados o listos para enviar)
+        # Obtener pedidos en producción (pagados, en producción, o listos para enviar)
         orders = (
             db.query(Order)
             .options(joinedload(Order.items))
-            .filter(Order.status.in_(["PAID", "READY_FOR_SHIPMENT"]))
+            .filter(Order.status.in_(["PAID", "IN_PRODUCTION", "READY_FOR_SHIPMENT"]))
             .order_by(Order.created_at.asc())  # Los más antiguos primero
             .all()
         )
@@ -871,11 +871,11 @@ async def update_production_status(
             detail=f"Orden {order_id} no encontrada"
         )
     
-    # Verificar que la orden esté pagada
-    if order.status != "PAID":
+    # Verificar que la orden esté pagada o en producción
+    if order.status not in ["PAID", "IN_PRODUCTION"]:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Solo se puede actualizar el estado de producción de órdenes pagadas. Estado actual: {order.status}"
+            detail=f"Solo se puede actualizar el estado de producción de órdenes pagadas o en producción. Estado actual: {order.status}"
         )
     
     # Validar el estado de producción
