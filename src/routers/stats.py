@@ -409,13 +409,17 @@ def get_dashboard_stats(db: Session = Depends(get_db)):
                 total_quantity = online_quantity + manual_adjustment
                 product_revenue = float(item.total_revenue) if item.total_revenue else 0.0
                 
+                # Calcular precio promedio de venta real (total_revenue / online_quantity)
+                # Esto muestra el precio real pagado, no el precio del catálogo
+                avg_sale_price = product_revenue / online_quantity if online_quantity > 0 else (product.price if product else 0.0)
+                
                 key = item.product_id or item.product_name
                 product_sales_dict[key] = {
                     "name": item.product_name,
                     "category": category_name,
                     "total_quantity": total_quantity,
                     "stock": stock,
-                    "price": price,
+                    "price": avg_sale_price,  # Precio promedio de venta real
                     "total_revenue": product_revenue,
                     "slug": slug
                 }
