@@ -137,6 +137,8 @@ def create_tables():
                     "tracking_branch_address": "VARCHAR(300)",
                     "tracking_attachment_url": "VARCHAR(500)",
                     "production_status": "VARCHAR(50)",  # Micro-estado de producción
+                    "confirmation_email_sent": "BOOLEAN DEFAULT FALSE",  # Flag para evitar duplicados
+                    "shipped_email_sent": "BOOLEAN DEFAULT FALSE",  # Flag para evitar duplicados
                     "created_at": "DATETIME",
                     "updated_at": "DATETIME",
                 }

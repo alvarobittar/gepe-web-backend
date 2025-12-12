@@ -76,6 +76,8 @@ class OrderOut(BaseModel):
     tracking_branch_address: Optional[str] = None  # Dirección de sucursal
     tracking_attachment_url: Optional[str] = None  # Link a comprobante
     production_status: Optional[str]  # Estado de producción
+    confirmation_email_sent: Optional[bool] = False
+    shipped_email_sent: Optional[bool] = False
     created_at: datetime
     updated_at: datetime
     items: List[OrderItemOut]

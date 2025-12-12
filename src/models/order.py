@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Float, ForeignKey, DateTime
+from sqlalchemy import Column, Integer, String, Float, ForeignKey, DateTime, Boolean
 from sqlalchemy.orm import relationship
 from datetime import datetime
 
@@ -42,6 +42,10 @@ class Order(Base):
     tracking_company = Column(String(150), nullable=True)  # Empresa de envío (Andreani, Correo Argentino, etc.)
     tracking_branch_address = Column(String(300), nullable=True)  # Sucursal o dirección de retiro/consulta
     tracking_attachment_url = Column(String(500), nullable=True)  # Link a comprobante/archivo de envío
+    
+    # Flags para evitar envío duplicado de emails
+    confirmation_email_sent = Column(Boolean, default=False)  # Email de confirmación de compra
+    shipped_email_sent = Column(Boolean, default=False)  # Email de envío con tracking
     
     # Timestamps
     created_at = Column(DateTime, default=datetime.utcnow)

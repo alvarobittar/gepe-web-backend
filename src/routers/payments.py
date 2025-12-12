@@ -399,21 +399,25 @@ async def mercadopago_webhook(
                     db.commit()
                     logger.info(f"Orden {order.id} actualizada a PAID con production_status=WAITING_FABRIC")
                     
-                    # Enviar email de confirmación al cliente
-                    try:
-                        from sqlalchemy.orm import joinedload
-                        from ..services.email_service import send_order_confirmation_email
-                        # Recargar la orden con los items para el email
-                        order_with_items = db.query(Order).options(joinedload(Order.items)).filter(Order.id == order.id).first()
-                        if order_with_items:
-                            email_sent = await send_order_confirmation_email(order_with_items)
-                            if email_sent:
-                                logger.info(f"✅ Email de confirmación enviado a {order.customer_email}")
-                            else:
-                                logger.warning(f"⚠️ No se pudo enviar email de confirmación a {order.customer_email}")
-                    except Exception as email_error:
-                        # No bloquear el webhook si falla el email
-                        logger.error(f"Error al enviar email de confirmación: {str(email_error)}")
+                    # Enviar email de confirmación al cliente (solo si no se ha enviado antes)
+                    if not order.confirmation_email_sent:
+                        try:
+                            from sqlalchemy.orm import joinedload
+                            from ..services.email_service import send_order_confirmation_email
+                            # Recargar la orden con los items para el email
+                            order_with_items = db.query(Order).options(joinedload(Order.items)).filter(Order.id == order.id).first()
+                            if order_with_items:
+                                email_sent = await send_order_confirmation_email(order_with_items)
+                                if email_sent:
+                                    # Marcar como enviado para no duplicar
+                                    order.confirmation_email_sent = True
+                                    db.commit()
+                                    logger.info(f"✅ Email de confirmación enviado a {order.customer_email}")
+                                else:
+                                    logger.warning(f"⚠️ No se pudo enviar email de confirmación a {order.customer_email}")
+                        except Exception as email_error:
+                            # No bloquear el webhook si falla el email
+                            logger.error(f"Error al enviar email de confirmación: {str(email_error)}")
                     
                 elif payment_status == "pending":
                     logger.info(f"⏳ Pago PENDIENTE para orden {external_reference} (puede ser Rapipago)")

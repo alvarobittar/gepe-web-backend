@@ -569,6 +569,9 @@ async def update_order(
             detail=f"Orden {order_id} no encontrada"
         )
     
+    # Guardar estado anterior para detectar cambios reales
+    previous_status = order.status
+    
     # Actualizar campos si están presentes
     if order_update.status:
         order.status = order_update.status
@@ -609,12 +612,39 @@ async def update_order(
         db.commit()
         db.refresh(order)
         
-        # Enviar email al cliente cuando el pedido es marcado como SHIPPED
-        if order_update.status == "SHIPPED":
+        # Enviar email de confirmación solo si:
+        # 1. El nuevo estado es PAID
+        # 2. El email de confirmación NO se ha enviado antes (flag en DB)
+        if order_update.status == "PAID" and not order.confirmation_email_sent:
+            try:
+                from sqlalchemy.orm import joinedload
+                from ..services.email_service import send_order_confirmation_email
+                # Recargar la orden con los items para el email
+                order_with_items = db.query(Order).options(joinedload(Order.items)).filter(Order.id == order.id).first()
+                if order_with_items:
+                    email_sent = await send_order_confirmation_email(order_with_items)
+                    if email_sent:
+                        # Marcar como enviado para no duplicar
+                        order.confirmation_email_sent = True
+                        db.commit()
+                        logger.info(f"✅ Email de confirmación enviado a {order.customer_email}")
+                    else:
+                        logger.warning(f"⚠️ No se pudo enviar email de confirmación a {order.customer_email}")
+            except Exception as email_error:
+                # No bloquear la actualización si falla el email
+                logger.error(f"Error al enviar email de confirmación: {str(email_error)}")
+        
+        # Enviar email de envío solo si:
+        # 1. El nuevo estado es SHIPPED
+        # 2. El email de envío NO se ha enviado antes (flag en DB)
+        if order_update.status == "SHIPPED" and not order.shipped_email_sent:
             try:
                 from ..services.email_service import send_order_shipped_email
                 email_sent = await send_order_shipped_email(order, order.tracking_code)
                 if email_sent:
+                    # Marcar como enviado para no duplicar
+                    order.shipped_email_sent = True
+                    db.commit()
                     logger.info(f"✅ Email de envío enviado a {order.customer_email}")
                 else:
                     logger.warning(f"⚠️ No se pudo enviar email de envío a {order.customer_email}")
