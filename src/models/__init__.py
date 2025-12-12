@@ -8,6 +8,7 @@ from .order import Order, OrderItem
 from .payment import Payment
 from .promo_banner import PromoBanner
 from .promo_banner_settings import PromoBannerSettings
+from .newsletter_subscriber import NewsletterSubscriber
 
 __all__ = [
     "User",
@@ -22,5 +23,6 @@ __all__ = [
     "Payment",
     "PromoBanner",
     "PromoBannerSettings",
+    "NewsletterSubscriber",
 ]
 

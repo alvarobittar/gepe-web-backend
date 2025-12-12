@@ -20,6 +20,7 @@ from .routers import (
     addresses,
     returns,
     contact,
+    newsletter,
 )
 from .config import get_settings, clear_settings_cache
 from .database import Base, engine, fix_sequences
@@ -55,6 +56,7 @@ from .models.promo_banner_settings import PromoBannerSettings  # noqa: F401
 from .models.club import Club  # noqa: F401
 from .models.notification_email import NotificationEmail  # noqa: F401
 from .models.hero_media import HeroMedia  # noqa: F401
+from .models.newsletter_subscriber import NewsletterSubscriber  # noqa: F401
 
 app_settings = get_settings()
 logger.info(f"🔧 CORS_ORIGIN configurado al iniciar: {app_settings.cors_origin}")
@@ -367,6 +369,7 @@ app.include_router(settings.router, prefix="/api")
 app.include_router(addresses.router, prefix="/api")
 app.include_router(returns.router, prefix="/api")
 app.include_router(contact.router, prefix="/api")
+app.include_router(newsletter.router)
 
 
 @app.get("/", tags=["root"])  # Simple welcome endpoint
