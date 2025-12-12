@@ -10,6 +10,7 @@ from ..models.product import Product, Category
 from ..models.promo_banner import PromoBanner
 from ..models.order import Order, OrderItem
 from ..models.user import User
+from ..models.unique_visit import UniqueVisit
 
 router = APIRouter(prefix="/stats", tags=["stats"])
 
@@ -73,6 +74,7 @@ class DashboardStatsResponse(BaseModel):
     total_revenue: float
     active_orders: int
     new_customers: int
+    unique_visitors: int  # Nuevo campo para visitantes únicos
     top_products: List[TopProductStats]
     recent_orders: List[RecentOrderStats]
     sales_chart: List[SalesDataPoint]
@@ -90,6 +92,45 @@ async def get_ranking():
             {"product_id": 1, "score": 75},
         ]
     }
+
+
+class UniqueVisitRequest(BaseModel):
+    session_id: str
+
+
+@router.post("/unique-visit")
+async def track_unique_visit(
+    request: UniqueVisitRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Registra una visita única.
+    El frontend envía un session_id único por navegador (guardado en localStorage).
+    Si ya existe, no se crea un nuevo registro.
+    """
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    try:
+        # Verificar si ya existe
+        existing = db.query(UniqueVisit).filter(
+            UniqueVisit.session_id == request.session_id
+        ).first()
+        
+        if not existing:
+            # Crear nuevo registro de visita
+            new_visit = UniqueVisit(session_id=request.session_id)
+            db.add(new_visit)
+            db.commit()
+            logger.info(f"Nueva visita única registrada: {request.session_id[:8]}...")
+            return {"status": "ok", "message": "Nueva visita registrada"}
+        
+        return {"status": "ok", "message": "Visita ya registrada"}
+    
+    except Exception as e:
+        logger.error(f"Error al registrar visita única: {e}")
+        db.rollback()
+        return {"status": "error", "message": str(e)}
 
 
 @router.get("/sales-ranking", response_model=SalesRankingResponse)
@@ -340,29 +381,26 @@ def get_dashboard_stats(db: Session = Depends(get_db)):
             logger.warning(f"Error al contar pedidos activos: {e}")
             active_orders = db.query(func.count(Order.id)).scalar() or 0
         
-        # --- Clientes nuevos (últimos 30 días) ---
+        # --- Clientes registrados (total) ---
+        # Nota: User.created_at no existe en el modelo, así que contamos todos los usuarios
+        # El dashboard ahora usa unique_visitors para mostrar visitantes del sitio
         thirty_days_ago = datetime.utcnow() - timedelta(days=30)
         try:
-            # Primero verificar si la columna created_at existe
-            from sqlalchemy import inspect
-            inspector = inspect(db.bind)
-            user_columns = [col["name"] for col in inspector.get_columns("users")]
-            
-            if "created_at" in user_columns:
-                new_customers = db.query(func.count(User.id)).filter(
-                    User.created_at >= thirty_days_ago
-                ).scalar() or 0
-            else:
-                # Si la columna no existe, contar todos los usuarios
-                new_customers = db.query(func.count(User.id)).scalar() or 0
+            new_customers = db.query(func.count(User.id)).scalar() or 0
         except Exception as e:
-            logger.warning(f"Error al contar clientes nuevos: {e}")
-            # Rollback para limpiar la transacción fallida en PostgreSQL
+            logger.warning(f"Error al contar clientes: {e}")
             db.rollback()
-            try:
-                new_customers = db.query(func.count(User.id)).scalar() or 0
-            except Exception:
-                new_customers = 0
+            new_customers = 0
+        
+        # --- Visitantes únicos (últimos 30 días) ---
+        try:
+            unique_visitors = db.query(func.count(UniqueVisit.id)).filter(
+                UniqueVisit.created_at >= thirty_days_ago
+            ).scalar() or 0
+        except Exception as e:
+            logger.warning(f"Error al contar visitantes únicos: {e}")
+            db.rollback()
+            unique_visitors = 0
         
         # --- Top productos vendidos (basado en OrderItems - excluyendo cancelados/reembolsados + ajuste manual) ---
         EXCLUDED_STATUSES_SALES = ["CANCELLED", "REFUNDED"]
@@ -596,6 +634,7 @@ def get_dashboard_stats(db: Session = Depends(get_db)):
             total_revenue=total_revenue,
             active_orders=active_orders,
             new_customers=new_customers,
+            unique_visitors=unique_visitors,
             top_products=top_products,
             recent_orders=recent_orders,
             sales_chart=sales_chart,
@@ -613,6 +652,7 @@ def get_dashboard_stats(db: Session = Depends(get_db)):
             total_revenue=0.0,
             active_orders=0,
             new_customers=0,
+            unique_visitors=0,
             top_products=[],
             recent_orders=[],
             sales_chart=[],

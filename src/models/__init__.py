@@ -9,6 +9,7 @@ from .payment import Payment
 from .promo_banner import PromoBanner
 from .promo_banner_settings import PromoBannerSettings
 from .newsletter_subscriber import NewsletterSubscriber
+from .unique_visit import UniqueVisit
 
 __all__ = [
     "User",
@@ -24,5 +25,6 @@ __all__ = [
     "PromoBanner",
     "PromoBannerSettings",
     "NewsletterSubscriber",
+    "UniqueVisit",
 ]
 
