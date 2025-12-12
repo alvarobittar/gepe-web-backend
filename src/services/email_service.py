@@ -206,12 +206,30 @@ async def send_order_shipped_email(order, tracking_code: str = None) -> bool:
         
         tracking_section = ""
         if tracking_code:
+            # Obtener empresa y sucursal del objeto order
+            tracking_company = getattr(order, 'tracking_company', None) or ""
+            tracking_branch = getattr(order, 'tracking_branch_address', None) or ""
+            
+            company_html = f"""
+                <p style="margin: 5px 0; color: #065f46;">
+                    <strong>Empresa:</strong> {tracking_company}
+                </p>
+            """ if tracking_company else ""
+            
+            branch_html = f"""
+                <p style="margin: 5px 0; color: #065f46; font-size: 14px;">
+                    <strong>Sucursal:</strong> {tracking_branch}
+                </p>
+            """ if tracking_branch else ""
+            
             tracking_section = f"""
             <div style="background: #ecfdf5; border: 1px solid #10b981; border-radius: 8px; padding: 15px; margin: 20px 0; text-align: center;">
-                <p style="margin: 0; color: #065f46;">
+                <p style="margin: 0 0 10px 0; color: #065f46;">
                     <strong>Código de seguimiento:</strong><br>
                     <span style="font-size: 18px; font-weight: bold; color: #10b981;">{tracking_code}</span>
                 </p>
+                {company_html}
+                {branch_html}
             </div>
             """
         
@@ -253,7 +271,17 @@ async def send_order_shipped_email(order, tracking_code: str = None) -> bool:
         """
         
         # Versión plain text
-        tracking_text = f"\nCódigo de seguimiento: {tracking_code}\n" if tracking_code else ""
+        tracking_company = getattr(order, 'tracking_company', None) or ""
+        tracking_branch = getattr(order, 'tracking_branch_address', None) or ""
+        
+        tracking_text = ""
+        if tracking_code:
+            tracking_text = f"\nCódigo de seguimiento: {tracking_code}"
+            if tracking_company:
+                tracking_text += f"\nEmpresa: {tracking_company}"
+            if tracking_branch:
+                tracking_text += f"\nSucursal: {tracking_branch}"
+            tracking_text += "\n"
         
         text_content = f"""
 Tu pedido esta en camino
