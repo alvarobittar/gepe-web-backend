@@ -375,7 +375,7 @@ def get_dashboard_stats(db: Session = Depends(get_db)):
         # --- Pedidos activos (no cancelados ni reembolsados) ---
         try:
             active_orders = db.query(func.count(Order.id)).filter(
-                ~Order.status.in_(["CANCELLED", "REFUNDED"])
+                ~Order.status.in_(["CANCELLED", "REFUNDED", "CART"])
             ).scalar() or 0
         except Exception as e:
             logger.warning(f"Error al contar pedidos activos: {e}")
