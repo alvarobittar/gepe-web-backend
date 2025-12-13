@@ -384,11 +384,28 @@ async def send_test_email(email: str) -> bool:
         </html>
         """
         
+        # Versión plain text para mejor deliverability
+        text_content = """
+Correo de prueba recibido
+
+Perfecto!
+
+Este es un correo de prueba para verificar que tu dirección de correo electrónico está configurada correctamente para recibir notificaciones del sistema de GEPE.
+
+Verificación exitosa: A partir de ahora, recibirás notificaciones sobre eventos importantes como nuevas ventas, pagos recibidos y stock bajo.
+
+No necesitas realizar ninguna acción. Este correo solo confirma que las notificaciones están funcionando correctamente.
+
+---
+Sistema de Notificaciones GEPE
+        """
+        
         params = {
             "from": os.getenv("RESEND_FROM_EMAIL", "GEPE <notificaciones@gepesport.com>"),
             "to": [email.strip()],
-            "subject": "✅ Correo de prueba - Notificaciones GEPE",
+            "subject": "Correo de prueba - Notificaciones GEPE",
             "html": html_content,
+            "text": text_content,
         }
         
         response = resend.Emails.send(params)
@@ -460,12 +477,37 @@ async def send_regret_notification_email(form_data: dict, admin_emails: List[str
         </body>
         </html>
         """
+        
+        # Versión plain text para mejor deliverability
+        text_content = f"""
+Arrepentimiento de compra
+
+Se recibió una solicitud de arrepentimiento de compra.
+
+Datos del cliente:
+- Nombre: {cliente_nombre or 'No especificado'}
+- DNI: {dni}
+- Ciudad: {ciudad}
+- Teléfono: {telefono}
+- Correo: {correo}
+
+Detalle de la compra:
+- N° Pedido: {numero_pedido}
+- Artículos: {articulos}
+
+Motivo:
+{motivo}
+
+---
+GEPE Notificaciones
+        """
 
         params = {
             "from": os.getenv("RESEND_FROM_EMAIL", "GEPE <notificaciones@gepesport.com>"),
             "to": admin_emails,
-            "subject": f"🛑 Arrepentimiento de compra - Pedido {numero_pedido}",
+            "subject": f"Arrepentimiento de compra - Pedido {numero_pedido}",
             "html": html_content,
+            "text": text_content,
         }
         resend.Emails.send(params)
         logger.info("Email de arrepentimiento enviado a admins")
@@ -609,17 +651,56 @@ async def send_sale_notification_email(order, admin_emails: List[str]) -> bool:
         </html>
         """
         
+        # Versión plain text para mejor deliverability
+        products_text = ""
+        for item in order.items:
+            size_text = f" (Talle: {item.product_size})" if item.product_size else ""
+            price_formatted = f"${item.unit_price:,.0f}".replace(",", ".")
+            subtotal = item.unit_price * item.quantity
+            subtotal_formatted = f"${subtotal:,.0f}".replace(",", ".")
+            products_text += f"  - {item.product_name}{size_text} x{item.quantity} - {price_formatted} = {subtotal_formatted}\n"
+        
+        shipping_text = ""
+        if order.shipping_method:
+            shipping_method_text = "Envío a domicilio" if order.shipping_method == "domicilio" else "Retiro en local"
+            shipping_text = f"\nEnvío: {shipping_method_text}"
+            if order.shipping_address:
+                shipping_text += f"\nDirección: {order.shipping_address}"
+            if order.shipping_city:
+                shipping_text += f"\nCiudad: {order.shipping_city}"
+        
+        text_content = f"""
+Nueva Venta Realizada
+
+Pedido: {order.order_number}
+
+Datos del Cliente:
+- Nombre: {order.customer_name or 'No especificado'}
+- Email: {order.customer_email}
+- Teléfono: {order.customer_phone or 'No especificado'}
+- DNI: {order.customer_dni or 'No especificado'}
+
+Productos ({total_items} items):
+{products_text}
+TOTAL: {total_formatted}
+{shipping_text}
+
+---
+Este es un email automático del sistema de notificaciones de GEPE.
+        """
+        
         # Enviar email a todos los administradores
         params = {
             "from": os.getenv("RESEND_FROM_EMAIL", "GEPE <notificaciones@gepesport.com>"),
             "to": admin_emails,
-            "subject": f"💰 Nueva Venta: {order.order_number} - {total_formatted}",
+            "subject": f"Nueva Venta: {order.order_number} - {total_formatted}",
             "html": html_content,
+            "text": text_content,
         }
         
         response = resend.Emails.send(params)
         
-        logger.info(f"✅ Notificación de venta enviada a {len(admin_emails)} administradores. Orden: {order.order_number}, ID: {response.get('id', 'N/A')}")
+        logger.info(f"Notificación de venta enviada a {len(admin_emails)} administradores. Orden: {order.order_number}, ID: {response.get('id', 'N/A')}")
         return True
         
     except Exception as e:
@@ -671,12 +752,28 @@ async def send_contact_email(form_data: dict, admin_emails: List[str]) -> bool:
         </body>
         </html>
         """
+        
+        # Versión plain text para mejor deliverability
+        text_content = f"""
+Nuevo mensaje de contacto
+
+Datos:
+- Nombre: {nombre}
+- Email: {email or 'No provisto'}
+
+Mensaje:
+{mensaje}
+
+---
+GEPE Contacto
+        """
 
         params = {
             "from": os.getenv("RESEND_FROM_EMAIL", "GEPE <notificaciones@gepesport.com>"),
             "to": admin_emails,
-            "subject": f"📨 Contacto: {nombre}",
+            "subject": f"Contacto: {nombre}",
             "html": html_content,
+            "text": text_content,
         }
 
         if email:

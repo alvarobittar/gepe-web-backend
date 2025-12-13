@@ -396,6 +396,16 @@ async def mercadopago_webhook(
                     order.payment_id = resource_id
                     # Auto-asignar estado de producción al pasar a PAID
                     order.production_status = PRODUCTION_STATUS_WAITING_FABRIC
+                    
+                    # FALLBACK DNI: Si la orden no tiene DNI pero MP sí, obtenerlo de MP
+                    if not order.customer_dni:
+                        payer_info = payment.get("payer", {})
+                        payer_identification = payer_info.get("identification", {})
+                        mp_dni = payer_identification.get("number")
+                        if mp_dni:
+                            order.customer_dni = mp_dni
+                            logger.info(f"DNI obtenido de MercadoPago: {mp_dni}")
+                    
                     db.commit()
                     logger.info(f"Orden {order.id} actualizada a PAID con production_status=WAITING_FABRIC")
                     

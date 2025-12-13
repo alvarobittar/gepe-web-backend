@@ -147,8 +147,8 @@ def get_sales_ranking(db: Session = Depends(get_db)):
     
     try:
         # Subconsulta para obtener total vendido por producto (ventas online)
-        # Contar todos los pedidos EXCEPTO los cancelados/reembolsados
-        EXCLUDED_STATUSES = ["CANCELLED", "REFUNDED"]
+        # Contar todos los pedidos EXCEPTO los cancelados/reembolsados/carritos abandonados
+        EXCLUDED_STATUSES = ["CANCELLED", "REFUNDED", "CART"]
         sales_subquery = (
             db.query(
                 OrderItem.product_id,
@@ -227,8 +227,8 @@ def get_trending_ranking(
         from_date = now_utc - timedelta(days=days if days > 0 else 7)
 
         # Subconsulta: ventas por producto en la ventana de tiempo (ventas online)
-        # Contar todos los pedidos EXCEPTO los cancelados/reembolsados
-        EXCLUDED_STATUSES = ["CANCELLED", "REFUNDED"]
+        # Contar todos los pedidos EXCEPTO los cancelados/reembolsados/carritos abandonados
+        EXCLUDED_STATUSES = ["CANCELLED", "REFUNDED", "CART"]
         weekly_sales_subquery = (
             db.query(
                 OrderItem.product_id,
@@ -402,8 +402,8 @@ def get_dashboard_stats(db: Session = Depends(get_db)):
             db.rollback()
             unique_visitors = 0
         
-        # --- Top productos vendidos (basado en OrderItems - excluyendo cancelados/reembolsados + ajuste manual) ---
-        EXCLUDED_STATUSES_SALES = ["CANCELLED", "REFUNDED"]
+        # --- Top productos vendidos (basado en OrderItems - excluyendo cancelados/reembolsados/carritos + ajuste manual) ---
+        EXCLUDED_STATUSES_SALES = ["CANCELLED", "REFUNDED", "CART"]
         top_products = []
         try:
             # Primero obtener ventas online por producto
@@ -497,11 +497,12 @@ def get_dashboard_stats(db: Session = Depends(get_db)):
         except Exception as e:
             logger.warning(f"Error al obtener top productos: {e}")
         
-        # --- Pedidos recientes (últimos 5) ---
+        # --- Pedidos recientes (últimos 5, excluyendo carritos y cancelados) ---
         recent_orders = []
         try:
             recent_orders_query = (
                 db.query(Order)
+                .filter(~Order.status.in_(["CART", "CANCELLED", "REFUNDED"]))  # Excluir carritos y cancelados
                 .order_by(desc(Order.created_at))
                 .limit(5)
                 .all()
