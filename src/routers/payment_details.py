@@ -195,6 +195,101 @@ async def sync_payments_from_orders(
         )
 
 
+@router.post("/orders/sync-payment-status")
+async def sync_orders_payment_status(
+    db: Session = Depends(get_db)
+):
+    """
+    Sincroniza el estado de órdenes basándose en los pagos de MercadoPago.
+    
+    Útil para corregir órdenes que quedaron en PENDING pero tienen pagos aprobados
+    (por ejemplo, debido a race conditions entre webhook y creación de orden).
+    """
+    try:
+        from ..models.order import Order, PRODUCTION_STATUS_WAITING_FABRIC
+        from ..services.email_service import send_order_confirmation_email
+        
+        # Buscar órdenes en PENDING
+        pending_orders = db.query(Order).filter(Order.status == "PENDING").all()
+        
+        synced_count = 0
+        results = []
+        
+        for order in pending_orders:
+            # Buscar payment aprobado para esta orden
+            approved_payment = None
+            
+            # Primero buscar por payment_id si existe
+            if order.payment_id:
+                approved_payment = db.query(Payment).filter(
+                    Payment.mp_payment_id == order.payment_id,
+                    Payment.status == "approved"
+                ).first()
+            
+            # Si no, buscar por external_reference en mp_raw_data
+            if not approved_payment and order.external_reference:
+                payments = db.query(Payment).filter(Payment.status == "approved").all()
+                for p in payments:
+                    if p.mp_raw_data:
+                        try:
+                            raw_data = json.loads(p.mp_raw_data)
+                            if raw_data.get("external_reference") == order.external_reference:
+                                approved_payment = p
+                                break
+                        except:
+                            pass
+            
+            if approved_payment:
+                # ¡Actualizar la orden a PAID!
+                order.status = "PAID"
+                order.payment_id = approved_payment.mp_payment_id
+                order.production_status = PRODUCTION_STATUS_WAITING_FABRIC
+                
+                # Vincular payment a order si no estaba
+                if not approved_payment.order_id:
+                    approved_payment.order_id = order.id
+                
+                synced_count += 1
+                results.append({
+                    "order_number": order.order_number,
+                    "customer_email": order.customer_email,
+                    "mp_payment_id": approved_payment.mp_payment_id,
+                    "updated_to": "PAID"
+                })
+                
+                logger.info(f"✅ Orden {order.order_number} sincronizada a PAID")
+                
+                # Enviar email de confirmación si no se ha enviado
+                if not order.confirmation_email_sent:
+                    try:
+                        from sqlalchemy.orm import joinedload
+                        order_with_items = db.query(Order).options(joinedload(Order.items)).filter(Order.id == order.id).first()
+                        if order_with_items:
+                            email_sent = await send_order_confirmation_email(order_with_items)
+                            if email_sent:
+                                order.confirmation_email_sent = True
+                                logger.info(f"✅ Email de confirmación enviado a {order.customer_email}")
+                    except Exception as email_error:
+                        logger.warning(f"No se pudo enviar email: {str(email_error)}")
+        
+        db.commit()
+        
+        return {
+            "synced": synced_count,
+            "orders": results,
+            "message": f"Se sincronizaron {synced_count} órdenes a PAID"
+        }
+        
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error al sincronizar estados de órdenes: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error al sincronizar estados: {str(e)}"
+        )
+
+
+
 @router.post("/payments/{payment_id}/refund")
 async def refund_payment(
     payment_id: int,

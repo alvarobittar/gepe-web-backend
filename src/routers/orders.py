@@ -103,11 +103,14 @@ async def create_order(
         while db.query(Order).filter(Order.order_number == order_number).first():
             order_number = generate_order_number()
         
+        # Usar el status del input (default: CART)
+        initial_status = order_input.status or "CART"
+        
         # Crear orden
         order = Order(
             user_id=user.id,
             order_number=order_number,
-            status="PENDING",
+            status=initial_status,  # Usar el status del input
             total_amount=total_amount,
             external_reference=order_input.external_reference,
             payment_id=order_input.payment_id,
@@ -120,6 +123,7 @@ async def create_order(
             shipping_city=order_input.shipping_city,
             shipping_province=order_input.shipping_province
         )
+
         
         db.add(order)
         db.flush()  # Para obtener el order.id antes de commit
@@ -136,27 +140,70 @@ async def create_order(
             )
             db.add(order_item)
         
+        # RACE CONDITION FIX: Verificar si ya existe un pago aprobado para esta orden
+        # Esto ocurre cuando el webhook de MP llega ANTES de que se cree la orden
+        from ..models.payment import Payment
+        from ..models.order import PRODUCTION_STATUS_WAITING_FABRIC
+        
+        existing_payment = None
+        if order_input.external_reference:
+            # Buscar en mp_raw_data por external_reference
+            payments = db.query(Payment).filter(Payment.status == "approved").all()
+            for p in payments:
+                if p.mp_raw_data:
+                    try:
+                        import json
+                        raw_data = json.loads(p.mp_raw_data)
+                        if raw_data.get("external_reference") == order_input.external_reference:
+                            existing_payment = p
+                            break
+                    except:
+                        pass
+        
+        # Si no encontramos por external_reference, buscar por payment_id
+        if not existing_payment and order_input.payment_id:
+            existing_payment = db.query(Payment).filter(
+                Payment.mp_payment_id == order_input.payment_id,
+                Payment.status == "approved"
+            ).first()
+        
+        if existing_payment:
+            # ¡El pago ya está aprobado! Actualizar la orden a PAID
+            logger.info(f"✅ Pago ya aprobado encontrado para orden {order.order_number}, actualizando a PAID")
+            order.status = "PAID"
+            order.payment_id = existing_payment.mp_payment_id
+            order.production_status = PRODUCTION_STATUS_WAITING_FABRIC
+            
+            # Vincular el payment a esta order si no estaba vinculado
+            if not existing_payment.order_id:
+                existing_payment.order_id = order.id
+        
         db.commit()
         db.refresh(order)
         
-        logger.info(f"Orden creada exitosamente: ID={order.id}, Email={order.customer_email}, Total=${total_amount}")
+        logger.info(f"Orden creada exitosamente: ID={order.id}, Status={order.status}, Email={order.customer_email}, Total=${total_amount}")
         
-        # Enviar notificación por email a los administradores
-        try:
-            admin_emails = db.query(NotificationEmail).filter(
-                NotificationEmail.verified == True
-            ).all()
-            if admin_emails:
-                email_list = [e.email for e in admin_emails]
-                await send_sale_notification_email(order, email_list)
-                logger.info(f"Notificación de venta enviada a {len(email_list)} administradores")
-            else:
-                logger.info("No hay emails de administradores verificados para enviar notificación")
-        except Exception as e:
-            # No bloquear la creación de la orden si falla el envío del email
-            logger.warning(f"Error al enviar notificación de venta (no crítico): {str(e)}")
+        # Enviar notificación por email a los administradores SOLO si la orden está PAGADA
+        # Esto evita enviar notificaciones para órdenes que aún no se completaron
+        if order.status == "PAID":
+            try:
+                admin_emails = db.query(NotificationEmail).filter(
+                    NotificationEmail.verified == True
+                ).all()
+                if admin_emails:
+                    email_list = [e.email for e in admin_emails]
+                    await send_sale_notification_email(order, email_list)
+                    logger.info(f"Notificación de venta enviada a {len(email_list)} administradores")
+                else:
+                    logger.info("No hay emails de administradores verificados para enviar notificación")
+            except Exception as e:
+                # No bloquear la creación de la orden si falla el envío del email
+                logger.warning(f"Error al enviar notificación de venta (no crítico): {str(e)}")
+        else:
+            logger.info(f"Orden {order.order_number} creada en status {order.status}, no se envía notificación a admins aún")
         
         return order
+
         
     except Exception as e:
         db.rollback()
@@ -172,12 +219,18 @@ def _list_orders_impl(
     search: str = None,
     skip: int = 0,
     limit: int = 100,
+    include_cart: bool = False,  # By default, exclude CART orders
     db: Session = None
 ):
     """
     Implementación compartida para listar órdenes.
+    Por defecto, excluye órdenes en estado CART (carritos abandonados).
     """
     query = db.query(Order).options(joinedload(Order.items))
+    
+    # Excluir CART por defecto, a menos que se solicite explícitamente
+    if not include_cart and not status_filter:
+        query = query.filter(Order.status != "CART")
     
     if status_filter:
         query = query.filter(Order.status == status_filter)
@@ -197,6 +250,7 @@ def _list_orders_impl(
             
         from sqlalchemy import or_
         query = query.filter(or_(*criteria))
+
     
     orders = query.order_by(Order.created_at.desc()).offset(skip).limit(limit).all()
     
@@ -245,23 +299,26 @@ async def list_orders(
     search: str = None,
     skip: int = 0,
     limit: int = 100,
+    include_cart: bool = False,  # Include abandoned carts
     db: Session = Depends(get_db)
 ):
     """
     Lista todas las órdenes. Opcionalmente filtra por status o texto de búsqueda.
     
     - Para admin: ver todas las órdenes
-    - Puede filtrar por status: PENDING, PAID, CANCELLED, REFUNDED
+    - Puede filtrar por status: CART, PENDING, PAID, CANCELLED, REFUNDED
     - Puede buscar por: ID, número de orden, email, nombre
+    - include_cart=true: Incluir carritos abandonados (status=CART)
     """
     try:
-        return _list_orders_impl(status_filter, search, skip, limit, db)
+        return _list_orders_impl(status_filter, search, skip, limit, include_cart, db)
     except Exception as e:
         logger.error(f"Error al listar órdenes: {str(e)}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error al obtener las órdenes: {str(e)}"
         )
+
 
 
 @router.get("/orders/user/{user_email}", response_model=List[OrderListOut])
@@ -367,6 +424,45 @@ async def get_order_by_number(
         logger.info(f"Acceso a orden {order_number} sin email (modo admin)")
     
     return order
+
+
+@router.patch("/orders/by-number/{order_number}")
+async def update_order_by_number(
+    order_number: str,
+    order_update: OrderUpdate,
+    db: Session = Depends(get_db)
+):
+    """
+    Actualiza una orden por order_number.
+    Útil para actualizar datos de envío en una orden CART existente.
+    """
+    order = db.query(Order).filter(Order.order_number == order_number).first()
+    
+    if not order:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Orden {order_number} no encontrada"
+        )
+    
+    # Solo permitir actualizar órdenes en estado CART
+    if order.status != "CART":
+        logger.warning(f"Intento de actualizar orden {order_number} que no está en CART (status={order.status})")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Solo se pueden actualizar órdenes en estado CART"
+        )
+    
+    # Actualizar campos proporcionados
+    update_data = order_update.model_dump(exclude_unset=True)
+    for field, value in update_data.items():
+        if hasattr(order, field):
+            setattr(order, field, value)
+    
+    db.commit()
+    db.refresh(order)
+    
+    logger.info(f"Orden {order_number} actualizada: {update_data}")
+    return {"status": "ok", "order_number": order_number}
 
 
 # =====================================================

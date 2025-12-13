@@ -34,20 +34,28 @@ class OrderCreate(BaseModel):
     shipping_province: Optional[str] = None
     external_reference: Optional[str] = None
     payment_id: Optional[str] = None
+    status: Optional[str] = "CART"  # Default to CART for new orders
     items: List[OrderItemCreate]
+
 
 
 class OrderUpdate(BaseModel):
     status: Optional[str] = None  # PENDING, PAID, IN_PRODUCTION, SHIPPED, DELIVERED, CANCELLED, REFUNDED
     production_status: Optional[str] = None  # WAITING_FABRIC, CUTTING, SEWING, PRINTING, FINISHED
     payment_id: Optional[str] = None
+    customer_email: Optional[str] = None
+    customer_name: Optional[str] = None
+    customer_phone: Optional[str] = None
+    customer_dni: Optional[str] = None
     shipping_address: Optional[str] = None
+
     shipping_city: Optional[str] = None
     shipping_province: Optional[str] = None
     tracking_code: Optional[str] = None
     tracking_company: Optional[str] = None  # Empresa de envío
     tracking_branch_address: Optional[str] = None  # Dirección de sucursal
     tracking_attachment_url: Optional[str] = None  # Link al comprobante/imagen
+
 
 
 class ProductionStatusUpdate(BaseModel):

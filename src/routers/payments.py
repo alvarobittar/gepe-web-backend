@@ -403,10 +403,13 @@ async def mercadopago_webhook(
                     if not order.confirmation_email_sent:
                         try:
                             from sqlalchemy.orm import joinedload
-                            from ..services.email_service import send_order_confirmation_email
+                            from ..services.email_service import send_order_confirmation_email, send_sale_notification_email
+                            from ..models.notification_email import NotificationEmail
+                            
                             # Recargar la orden con los items para el email
                             order_with_items = db.query(Order).options(joinedload(Order.items)).filter(Order.id == order.id).first()
                             if order_with_items:
+                                # Email de confirmación al cliente
                                 email_sent = await send_order_confirmation_email(order_with_items)
                                 if email_sent:
                                     # Marcar como enviado para no duplicar
@@ -415,9 +418,22 @@ async def mercadopago_webhook(
                                     logger.info(f"✅ Email de confirmación enviado a {order.customer_email}")
                                 else:
                                     logger.warning(f"⚠️ No se pudo enviar email de confirmación a {order.customer_email}")
+                                
+                                # Email de notificación a admins (nueva venta)
+                                try:
+                                    admin_emails = db.query(NotificationEmail).filter(
+                                        NotificationEmail.verified == True
+                                    ).all()
+                                    if admin_emails:
+                                        email_list = [e.email for e in admin_emails]
+                                        await send_sale_notification_email(order_with_items, email_list)
+                                        logger.info(f"✅ Notificación de venta enviada a {len(email_list)} administradores")
+                                except Exception as admin_email_error:
+                                    logger.warning(f"⚠️ No se pudo enviar notificación a admins: {str(admin_email_error)}")
                         except Exception as email_error:
                             # No bloquear el webhook si falla el email
-                            logger.error(f"Error al enviar email de confirmación: {str(email_error)}")
+                            logger.error(f"Error al enviar emails: {str(email_error)}")
+
                     
                 elif payment_status == "pending":
                     logger.info(f"⏳ Pago PENDIENTE para orden {external_reference} (puede ser Rapipago)")
