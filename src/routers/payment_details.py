@@ -444,3 +444,215 @@ async def get_payment_detail(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error al obtener el detalle del pago: {str(e)}"
         )
+
+
+@router.post("/payments/{mp_payment_id}/recover-order")
+async def recover_order_from_payment(
+    mp_payment_id: str,
+    db: Session = Depends(get_db)
+):
+    """
+    Recupera una orden huérfana desde un pago de MercadoPago.
+    
+    Útil cuando un cliente pagó pero no volvió a la página de éxito,
+    por lo que el pago existe pero la orden nunca se creó.
+    
+    Este endpoint:
+    1. Busca el Payment por mp_payment_id
+    2. Verifica que no tenga orden asociada
+    3. Extrae datos del cliente y productos del mp_raw_data
+    4. Crea la Order y OrderItems
+    5. Vincula el Payment a la Order
+    6. Envía el email de confirmación al cliente
+    """
+    try:
+        import secrets
+        import string
+        from ..models.order import Order, OrderItem, PRODUCTION_STATUS_WAITING_FABRIC
+        from ..models.user import User
+        from ..services.email_service import send_order_confirmation_email
+        
+        # Buscar el pago
+        payment = db.query(Payment).filter(Payment.mp_payment_id == mp_payment_id).first()
+        
+        if not payment:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Pago con ID {mp_payment_id} no encontrado"
+            )
+        
+        # Verificar que no tenga orden asociada
+        if payment.order_id:
+            existing_order = db.query(Order).filter(Order.id == payment.order_id).first()
+            if existing_order:
+                return {
+                    "success": False,
+                    "message": f"Este pago ya tiene una orden asociada: {existing_order.order_number}",
+                    "order_number": existing_order.order_number,
+                    "order_id": existing_order.id
+                }
+        
+        # Verificar que el pago esté aprobado
+        if payment.status != "approved":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Solo se pueden recuperar órdenes de pagos aprobados. Estado actual: {payment.status}"
+            )
+        
+        # Parsear mp_raw_data
+        if not payment.mp_raw_data:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="El pago no tiene datos raw de MercadoPago para recuperar"
+            )
+        
+        raw_data = json.loads(payment.mp_raw_data)
+        
+        # Extraer información del cliente
+        payer = raw_data.get("payer", {})
+        additional_info = raw_data.get("additional_info", {})
+        additional_payer = additional_info.get("payer", {})
+        
+        customer_email = payer.get("email")
+        customer_name = f"{additional_payer.get('first_name', '')} {additional_payer.get('last_name', '')}".strip()
+        
+        # Si no hay nombre en additional_info, intentar desde card.cardholder
+        if not customer_name:
+            card = raw_data.get("card", {})
+            cardholder = card.get("cardholder", {})
+            customer_name = cardholder.get("name", "")
+        
+        # DNI del cliente
+        payer_identification = payer.get("identification", {})
+        card_identification = raw_data.get("card", {}).get("cardholder", {}).get("identification", {})
+        customer_dni = card_identification.get("number") or payer_identification.get("number")
+        
+        if not customer_email:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="No se pudo extraer el email del cliente de los datos del pago"
+            )
+        
+        # Extraer items del pago
+        items_data = additional_info.get("items", [])
+        
+        if not items_data:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="No se encontraron items en los datos del pago"
+            )
+        
+        # Buscar o crear usuario
+        user = db.query(User).filter(User.email == customer_email).first()
+        if not user:
+            user = User(
+                email=customer_email,
+                full_name=customer_name,
+                hashed_password=None
+            )
+            db.add(user)
+            db.flush()
+        
+        # Generar número de orden único
+        def generate_order_number():
+            chars = string.ascii_uppercase + string.digits
+            random_code = ''.join(secrets.choice(chars) for _ in range(6))
+            return f"GEPE-{random_code}"
+        
+        order_number = generate_order_number()
+        while db.query(Order).filter(Order.order_number == order_number).first():
+            order_number = generate_order_number()
+        
+        # Calcular total desde los items
+        total_amount = payment.transaction_amount
+        
+        # Crear la orden
+        order = Order(
+            user_id=user.id,
+            order_number=order_number,
+            status="PAID",  # Ya está pagado
+            total_amount=total_amount,
+            external_reference=raw_data.get("external_reference"),
+            payment_id=mp_payment_id,
+            customer_email=customer_email,
+            customer_name=customer_name,
+            customer_phone=None,  # No disponible en raw_data
+            customer_dni=customer_dni,
+            shipping_method=None,  # No disponible, el cliente deberá proporcionar
+            shipping_address=None,
+            shipping_city=None,
+            shipping_province=None,
+            production_status=PRODUCTION_STATUS_WAITING_FABRIC
+        )
+        
+        db.add(order)
+        db.flush()
+        
+        # Crear los items de la orden
+        for item_data in items_data:
+            # Parsear descripción para extraer calidad y talle
+            description = item_data.get("description", "")
+            product_size = None
+            
+            # Intentar extraer talle de la descripción (formato: "Calidad: X - Talle: Y")
+            if "Talle:" in description:
+                try:
+                    talle_part = description.split("Talle:")[1].strip()
+                    product_size = talle_part.split()[0] if talle_part else None
+                except:
+                    pass
+            
+            order_item = OrderItem(
+                order_id=order.id,
+                product_id=int(item_data.get("id", 0)) if item_data.get("id") else None,
+                product_name=item_data.get("title", "Producto"),
+                product_size=product_size,
+                quantity=int(item_data.get("quantity", 1)),
+                unit_price=float(item_data.get("unit_price", 0))
+            )
+            db.add(order_item)
+        
+        # Vincular el Payment a la Order
+        payment.order_id = order.id
+        
+        db.commit()
+        db.refresh(order)
+        
+        logger.info(f"✅ Orden {order_number} recuperada desde pago {mp_payment_id}")
+        
+        # Intentar enviar email de confirmación
+        email_sent = False
+        try:
+            # Recargar orden con items
+            order_with_items = db.query(Order).options(joinedload(Order.items)).filter(Order.id == order.id).first()
+            if order_with_items:
+                email_sent = await send_order_confirmation_email(order_with_items)
+                if email_sent:
+                    order.confirmation_email_sent = True
+                    db.commit()
+                    logger.info(f"✅ Email de confirmación enviado a {customer_email}")
+        except Exception as email_error:
+            logger.warning(f"No se pudo enviar email de confirmación: {str(email_error)}")
+        
+        return {
+            "success": True,
+            "message": f"Orden recuperada exitosamente",
+            "order_number": order_number,
+            "order_id": order.id,
+            "customer_email": customer_email,
+            "customer_name": customer_name,
+            "total_amount": total_amount,
+            "items_count": len(items_data),
+            "email_sent": email_sent,
+            "note": "IMPORTANTE: Esta orden no tiene datos de envío. Contactar al cliente para obtenerlos."
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error al recuperar orden desde pago: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error al recuperar la orden: {str(e)}"
+        )
